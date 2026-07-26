@@ -1,0 +1,5 @@
+# Auto detect text files for normal repository files (LICENSE, README, src, etc.)
+* text=auto
+
+# Keep all thirdparty files 100% raw and untouched - never modify any line endings or characters
+thirdparty/** -text
