@@ -9,7 +9,7 @@ BIN_DIR = $(BUILD_DIR)/bin
 IMGUI_DIR = thirdparty/imgui
 GLFW_DIR = thirdparty/glfw
 
-SOURCES = src/main.cpp
+SOURCES = src/main.cpp src/core/app.cpp
 SOURCES += $(IMGUI_DIR)/imgui.cpp \
            $(IMGUI_DIR)/imgui_demo.cpp \
            $(IMGUI_DIR)/imgui_draw.cpp \
@@ -65,8 +65,11 @@ all: $(TARGET)
 	@echo 'Build complete for $(ECHO_MESSAGE)'
 	@echo 'Output binary: $(TARGET)'
 
-# Compile source files into object files
+# Compile source files from src/ and subdirectories
 $(OBJ_DIR)/%.o: src/%.cpp | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(OBJ_DIR)/%.o: src/core/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(OBJ_DIR)/%.o: $(IMGUI_DIR)/%.cpp | $(OBJ_DIR)
