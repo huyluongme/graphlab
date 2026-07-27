@@ -1,5 +1,10 @@
-# Auto detect text files for normal repository files (LICENSE, README, src, etc.)
+# Auto detect text files for normal repository files
 * text=auto
 
-# Keep all thirdparty files 100% raw and untouched - never modify any line endings or characters
+# Enforce LF for config files and Makefile
+Makefile text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+
+# Keep all thirdparty files 100% raw and untouched
 thirdparty/** -text
