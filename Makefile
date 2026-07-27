@@ -1,6 +1,5 @@
 # GraphLab Makefile
-# Based on Dear ImGui GLFW + OpenGL3 Example Makefile
-# Adapted for GraphLab Project Structure
+# Target Platforms: Windows (MinGW/MSYS2) & Linux (GCC)
 
 EXE = graphlab
 BUILD_DIR = build
@@ -25,7 +24,7 @@ OBJS = $(addprefix $(OBJ_DIR)/, $(addsuffix .o, $(basename $(notdir $(SOURCES)))
 UNAME_S := $(shell uname -s 2>/dev/null || echo Windows_NT)
 
 CXXFLAGS = -std=c++17 -Wall -Wformat
-CXXFLAGS += -Isrc -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -I$(GLFW_DIR)/include
+CXXFLAGS += -Isrc -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -I$(GLFW_DIR)/include -Ithirdparty/stb
 
 # Detect Windows Environment (MSYS2, MinGW, Cygwin, Native Windows)
 IS_WINDOWS = 0
@@ -40,21 +39,22 @@ else ifneq ($(findstring CYGWIN,$(UNAME_S)),)
 endif
 
 ##---------------------------------------------------------------------
-## BUILD FLAGS PER PLATFORM
+## PLATFORM SPECIFIC CONFIGURATION (WINDOWS / LINUX)
 ##---------------------------------------------------------------------
 
 ifeq ($(IS_WINDOWS), 1)
     ECHO_MESSAGE = Windows (MinGW/MSYS2)
     LIBS = $(GLFW_DIR)/win64/libglfw3.a -lopengl32 -lgdi32 -limm32
+    ifneq ($(DEBUG), 1)
+        LIBS += -mwindows
+    endif
     TARGET = $(BIN_DIR)/$(EXE).exe
-else ifeq ($(UNAME_S), Linux)
+    RES_OBJ = $(OBJ_DIR)/resource.o
+else
     ECHO_MESSAGE = Linux
     LIBS = -lglfw -lGL -ldl -lpthread
     TARGET = $(BIN_DIR)/$(EXE)
-else ifeq ($(UNAME_S), Darwin)
-    ECHO_MESSAGE = Mac OS X
-    LIBS = -lglfw -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo
-    TARGET = $(BIN_DIR)/$(EXE)
+    RES_OBJ =
 endif
 
 ##---------------------------------------------------------------------
@@ -65,7 +65,7 @@ all: $(TARGET)
 	@echo 'Build complete for $(ECHO_MESSAGE)'
 	@echo 'Output binary: $(TARGET)'
 
-# Pattern rules to compile object files into build/objs/
+# Compile source files into object files
 $(OBJ_DIR)/%.o: src/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
@@ -75,15 +75,19 @@ $(OBJ_DIR)/%.o: $(IMGUI_DIR)/%.cpp | $(OBJ_DIR)
 $(OBJ_DIR)/%.o: $(IMGUI_DIR)/backends/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-# Create directories
+# Compile Windows Resource Script (Icon)
+$(OBJ_DIR)/resource.o: assets/resource.rc | $(OBJ_DIR)
+	windres $< -o $@
+
+# Create Directories
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
-# Linking rule
-$(TARGET): $(OBJS) | $(BIN_DIR)
+# Link Executable
+$(TARGET): $(OBJS) $(RES_OBJ) | $(BIN_DIR)
 	$(CXX) -o $@ $^ $(CXXFLAGS) $(LIBS)
 
 clean:

@@ -1,0 +1,5 @@
+// Windows Resource Script for GraphLab
+#include <windows.h>
+
+// ID 1 is the primary icon ID recognized by Windows File Explorer
+1 ICON "assets/icon.ico"

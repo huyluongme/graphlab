@@ -1,3 +1,4 @@
+// GraphLab - Main Entry Point
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -5,9 +6,54 @@
 #define GL_SILENCE_DEPRECATION
 #include <GLFW/glfw3.h>
 
+#if defined(_WIN32)
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#include <windows.h>
+#endif
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 static void glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
+}
+
+static void set_application_icon(GLFWwindow* window)
+{
+#if defined(_WIN32)
+    // 1. Native Windows API: Load icon embedded inside executable resources (ID 1)
+    HWND hwnd = glfwGetWin32Window(window);
+    HICON hIcon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(1));
+    if (hIcon)
+    {
+        SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+        SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+    }
+#endif
+
+    // 2. Cross-platform GLFW Window Icon fallback using PNG
+    const char* paths[] = { "assets/icon.png", "../assets/icon.png", "../../assets/icon.png" };
+    unsigned char* pixels = nullptr;
+    int w = 0, h = 0, channels = 0;
+
+    for (const char* path : paths)
+    {
+        pixels = stbi_load(path, &w, &h, &channels, 4);
+        if (pixels)
+            break;
+    }
+
+    if (pixels)
+    {
+        GLFWimage images[1];
+        images[0].width = w;
+        images[0].height = h;
+        images[0].pixels = pixels;
+        glfwSetWindowIcon(window, 1, images);
+        stbi_image_free(pixels);
+    }
 }
 
 int main(int, char**)
@@ -28,6 +74,9 @@ int main(int, char**)
         return 1;
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1); // Enable vsync
+
+    // Set Window Titlebar and Taskbar Icon
+    set_application_icon(window);
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
