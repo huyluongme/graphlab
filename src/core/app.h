@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ui/main_menu_bar.h"
 #include <string>
 #include <cstdint>
 
@@ -53,6 +54,8 @@ namespace GraphLab
         AppSpec m_Spec;
         GLFWwindow* m_Window = nullptr;
         bool m_Running = false;
+
+        UI::MainMenuBar m_MainMenuBar;
 
         static App* s_Instance;
     };

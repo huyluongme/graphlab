@@ -208,6 +208,10 @@ namespace GraphLab
 
     void App::OnRenderUI()
     {
+        // 1. Render Top Main Navigation Menu Bar
+        m_MainMenuBar.OnRenderUI();
+
+        // 2. Render Main Workspace Window
         ImGuiIO& io = ImGui::GetIO();
 
         // Enforce full-viewport coverage for the main workspace window
@@ -227,9 +231,10 @@ namespace GraphLab
         ImGui::Begin("GraphLab Workspace", nullptr, window_flags);
         ImGui::PopStyleVar(3);
 
+        ImGui::Dummy(ImVec2(0.0f, 20.0f)); // Spacer for top menu bar
         ImGui::Text("Welcome to GraphLab - Graphing Calculator");
         ImGui::Separator();
-        ImGui::Text("Status: Professional Refactored Architecture!");
+        ImGui::Text("Status: Main Menu Bar Integrated!");
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
         ImGui::End();

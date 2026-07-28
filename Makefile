@@ -9,7 +9,7 @@ BIN_DIR = $(BUILD_DIR)/bin
 IMGUI_DIR = thirdparty/imgui
 GLFW_DIR = thirdparty/glfw
 
-SOURCES = src/main.cpp src/core/app.cpp
+SOURCES = src/main.cpp src/core/app.cpp src/ui/main_menu_bar.cpp
 SOURCES += $(IMGUI_DIR)/imgui.cpp \
            $(IMGUI_DIR)/imgui_demo.cpp \
            $(IMGUI_DIR)/imgui_draw.cpp \
@@ -70,6 +70,9 @@ $(OBJ_DIR)/%.o: src/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(OBJ_DIR)/%.o: src/core/%.cpp | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(OBJ_DIR)/%.o: src/ui/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(OBJ_DIR)/%.o: $(IMGUI_DIR)/%.cpp | $(OBJ_DIR)
