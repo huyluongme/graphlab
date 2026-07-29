@@ -16,52 +16,41 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-static void glfw_error_callback(int error, const char* description)
-{
+static void glfw_error_callback(int error, const char* description) {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
 // OS Framebuffer Callback: Forces a synchronous frame render during Win32 modal resize loops
-static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
+static void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     if (width <= 0 || height <= 0)
         return;
 
     if (GraphLab::App::HasInstance() && GraphLab::App::Get().GetNativeWindow() == window)
-    {
         GraphLab::App::Get().RenderFrame();
-    }
 }
 
-namespace GraphLab
-{
+namespace GraphLab {
     App* App::s_Instance = nullptr;
 
-    App::App(const AppSpec& spec)
-        : m_Spec(spec)
-    {
+    App::App(const AppSpec& spec) : m_Spec(spec) {
         s_Instance = this;
     }
 
-    App::~App()
-    {
+    App::~App() {
         Shutdown();
         s_Instance = nullptr;
     }
 
-    int App::Run()
-    {
+    int App::Run() {
         if (!Init())
             return -1;
 
         m_Running = true;
 
-        while (m_Running && !glfwWindowShouldClose(m_Window))
-        {
+        while (m_Running && !glfwWindowShouldClose(m_Window)) {
             glfwPollEvents();
 
-            if (glfwGetWindowAttrib(m_Window, GLFW_ICONIFIED) != 0)
-            {
+            if (glfwGetWindowAttrib(m_Window, GLFW_ICONIFIED) != 0) {
                 ImGui_ImplGlfw_Sleep(10);
                 continue;
             }
@@ -73,8 +62,7 @@ namespace GraphLab
         return 0;
     }
 
-    void App::RenderFrame()
-    {
+    void App::RenderFrame() {
         if (!m_Window)
             return;
 
@@ -110,8 +98,7 @@ namespace GraphLab
         glfwSwapBuffers(m_Window);
     }
 
-    bool App::Init()
-    {
+    bool App::Init() {
         glfwSetErrorCallback(glfw_error_callback);
         if (!glfwInit())
             return false;
@@ -131,8 +118,7 @@ namespace GraphLab
 
         // Center window on the primary monitor work area
         GLFWmonitor* primary_monitor = glfwGetPrimaryMonitor();
-        if (primary_monitor)
-        {
+        if (primary_monitor) {
             int monitor_x = 0, monitor_y = 0, monitor_w = 0, monitor_h = 0;
             glfwGetMonitorWorkarea(primary_monitor, &monitor_x, &monitor_y, &monitor_w, &monitor_h);
             int pos_x = monitor_x + (monitor_w - (int)m_Spec.Width) / 2;
@@ -166,14 +152,12 @@ namespace GraphLab
         return true;
     }
 
-    void App::SetAppIcon()
-    {
+    void App::SetAppIcon() {
 #if defined(_WIN32)
         // 1. Native Windows Win32 Icon (Embedded Resource ID 1)
         HWND hwnd = glfwGetWin32Window(m_Window);
         HICON hIcon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(1));
-        if (hIcon)
-        {
+        if (hIcon) {
             SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
             SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
         }
@@ -184,15 +168,13 @@ namespace GraphLab
         unsigned char* pixels = nullptr;
         int w = 0, h = 0, channels = 0;
 
-        for (const char* path : paths)
-        {
+        for (const char* path : paths) {
             pixels = stbi_load(path, &w, &h, &channels, 4);
             if (pixels)
                 break;
         }
 
-        if (pixels)
-        {
+        if (pixels) {
             GLFWimage images[1];
             images[0].width = w;
             images[0].height = h;
@@ -202,12 +184,9 @@ namespace GraphLab
         }
     }
 
-    void App::OnUpdate()
-    {
-    }
+    void App::OnUpdate() { }
 
-    void App::OnRenderUI()
-    {
+    void App::OnRenderUI() {
         // 1. Render Top Main Navigation Menu Bar
         m_MainMenuBar.OnRenderUI();
 
@@ -218,11 +197,11 @@ namespace GraphLab
         ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
         ImGui::SetNextWindowSize(io.DisplaySize);
 
-        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration 
-                                      | ImGuiWindowFlags_NoMove 
-                                      | ImGuiWindowFlags_NoResize 
-                                      | ImGuiWindowFlags_NoSavedSettings
-                                      | ImGuiWindowFlags_NoBringToFrontOnFocus;
+        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration |
+                                        ImGuiWindowFlags_NoMove |
+                                        ImGuiWindowFlags_NoResize |
+                                        ImGuiWindowFlags_NoSavedSettings |
+                                        ImGuiWindowFlags_NoBringToFrontOnFocus;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -240,8 +219,7 @@ namespace GraphLab
         ImGui::End();
     }
 
-    void App::Shutdown()
-    {
+    void App::Shutdown() {
         if (m_Window == nullptr)
             return;
 

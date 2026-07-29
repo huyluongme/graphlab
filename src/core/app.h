@@ -6,8 +6,7 @@
 
 struct GLFWwindow;
 
-namespace GraphLab
-{
+namespace GraphLab {
     /**
      * @brief Configuration specification for application initialization.
      */
@@ -21,8 +20,7 @@ namespace GraphLab
     /**
      * @brief Core Application class managing window lifecycle, graphics context, and rendering loops.
      */
-    class App
-    {
+    class App {
     public:
         explicit App(const AppSpec& spec = AppSpec());
         ~App();

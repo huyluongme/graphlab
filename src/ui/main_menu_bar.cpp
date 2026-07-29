@@ -2,18 +2,12 @@
 #include "core/app.h"
 #include "imgui.h"
 
-namespace GraphLab
-{
-    namespace UI
-    {
-
-        void MainMenuBar::OnRenderUI()
-        {
-            if (ImGui::BeginMainMenuBar())
-            {
+namespace GraphLab {
+    namespace UI {
+        void MainMenuBar::OnRenderUI() {
+            if (ImGui::BeginMainMenuBar()) {
                 // 1. FILE MENU
-                if (ImGui::BeginMenu("File"))
-                {
+                if (ImGui::BeginMenu("File")) {
                     if (ImGui::MenuItem("New Workspace", "Ctrl+N")) {}
                     if (ImGui::MenuItem("Open Project...", "Ctrl+O")) {}
                     if (ImGui::MenuItem("Save Project", "Ctrl+S")) {}
@@ -21,15 +15,13 @@ namespace GraphLab
                     if (ImGui::MenuItem("Export Graph Image (PNG)...", "Ctrl+E")) {}
                     ImGui::Separator();
                     if (ImGui::MenuItem("Exit", "Alt+F4"))
-                    {
                         App::Get().Close();
-                    }
+
                     ImGui::EndMenu();
                 }
 
                 // 2. EDIT MENU
-                if (ImGui::BeginMenu("Edit"))
-                {
+                if (ImGui::BeginMenu("Edit")) {
                     if (ImGui::MenuItem("Add Function", "Ctrl+A")) {}
                     if (ImGui::MenuItem("Clear All Functions")) {}
                     ImGui::Separator();
@@ -38,8 +30,7 @@ namespace GraphLab
                 }
 
                 // 3. VIEW MENU
-                if (ImGui::BeginMenu("View"))
-                {
+                if (ImGui::BeginMenu("View")) {
                     if (ImGui::MenuItem("Reset Viewport (Zoom 1:1)", "R")) {}
                     ImGui::Separator();
 
@@ -56,15 +47,12 @@ namespace GraphLab
                 }
 
                 // 4. HELP MENU
-                if (ImGui::BeginMenu("Help"))
-                {
+                if (ImGui::BeginMenu("Help")) {
                     if (ImGui::MenuItem("Math Syntax Guide")) {}
                     if (ImGui::MenuItem("Keyboard Shortcuts")) {}
                     ImGui::Separator();
                     if (ImGui::MenuItem("About GraphLab"))
-                    {
                         m_ShowAboutPopup = true;
-                    }
                     ImGui::EndMenu();
                 }
 
@@ -75,16 +63,13 @@ namespace GraphLab
             ShowAboutPopup();
         }
 
-        void MainMenuBar::ShowAboutPopup()
-        {
-            if (m_ShowAboutPopup)
-            {
+        void MainMenuBar::ShowAboutPopup() {
+            if (m_ShowAboutPopup) {
                 ImGui::OpenPopup("About GraphLab");
                 m_ShowAboutPopup = false;
             }
 
-            if (ImGui::BeginPopupModal("About GraphLab", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-            {
+            if (ImGui::BeginPopupModal("About GraphLab", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
                 ImGui::Text("GraphLab - Graphing Calculator v1.0.0");
                 ImGui::Separator();
                 ImGui::Text("A modern C++ 2D graphing desktop application.");
