@@ -190,33 +190,8 @@ namespace GraphLab {
         // 1. Render Top Main Navigation Menu Bar
         m_MainMenuBar.OnRenderUI();
 
-        // 2. Render Main Workspace Window
-        ImGuiIO& io = ImGui::GetIO();
-
-        // Enforce full-viewport coverage for the main workspace window
-        ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
-        ImGui::SetNextWindowSize(io.DisplaySize);
-
-        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration |
-                                        ImGuiWindowFlags_NoMove |
-                                        ImGuiWindowFlags_NoResize |
-                                        ImGuiWindowFlags_NoSavedSettings |
-                                        ImGuiWindowFlags_NoBringToFrontOnFocus;
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(15.0f, 15.0f));
-
-        ImGui::Begin("GraphLab Workspace", nullptr, window_flags);
-        ImGui::PopStyleVar(3);
-
-        ImGui::Dummy(ImVec2(0.0f, 20.0f)); // Spacer for top menu bar
-        ImGui::Text("Welcome to GraphLab - Graphing Calculator");
-        ImGui::Separator();
-        ImGui::Text("Status: Main Menu Bar Integrated!");
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-
-        ImGui::End();
+        // 2. Render Sidebar Panel
+        m_SidebarPanel.OnRenderUI();
     }
 
     void App::Shutdown() {

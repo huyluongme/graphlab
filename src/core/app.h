@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ui/main_menu_bar.h"
+#include "ui/sidebar_panel.h"
 #include <string>
 #include <cstdint>
 
@@ -41,6 +42,9 @@ namespace GraphLab {
         GLFWwindow* GetNativeWindow() const { return m_Window; }
         const AppSpec& GetSpec() const { return m_Spec; }
 
+        const UI::SidebarPanel& GetSidebarPanel() const { return m_SidebarPanel; }
+        UI::SidebarPanel& GetSidebarPanel() { return m_SidebarPanel; }
+
     private:
         bool Init();
         void SetAppIcon();
@@ -54,6 +58,7 @@ namespace GraphLab {
         bool m_Running = false;
 
         UI::MainMenuBar m_MainMenuBar;
+        UI::SidebarPanel m_SidebarPanel;
 
         static App* s_Instance;
     };
