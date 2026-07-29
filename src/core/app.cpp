@@ -25,8 +25,9 @@ static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     if (width <= 0 || height <= 0)
         return;
 
-    if (GraphLab::App::HasInstance() && GraphLab::App::Get().GetNativeWindow() == window)
+    if (GraphLab::App::HasInstance() && GraphLab::App::Get().GetNativeWindow() == window) {
         GraphLab::App::Get().RenderFrame();
+    }
 }
 
 namespace GraphLab {
@@ -145,6 +146,15 @@ namespace GraphLab {
         float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
         ImGuiStyle& style = ImGui::GetStyle();
         style.ScaleAllSizes(main_scale);
+
+        // Load Inter-Medium font with full Vietnamese Unicode glyph ranges
+        const ImWchar* vietnamese_ranges = io.Fonts->GetGlyphRangesVietnamese();
+        const char* inter_font_path = "../../assets/fonts/Inter_18pt-Medium.ttf";
+        float font_size = 18.0f * main_scale;
+        if (FILE* f = fopen(inter_font_path, "rb")) {
+            fclose(f);
+            io.Fonts->AddFontFromFileTTF(inter_font_path, font_size, nullptr, vietnamese_ranges);
+        }
 
         ImGui_ImplGlfw_InitForOpenGL(m_Window, true);
         ImGui_ImplOpenGL3_Init(glsl_version);
