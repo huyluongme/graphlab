@@ -1,15 +1,18 @@
 #include "sidebar_panel.h"
+#include <cstdlib>
 
 namespace GraphLab::UI {
     SidebarPanel::SidebarPanel() {}
 
-    void SidebarPanel::OnRenderUI(){
+    void SidebarPanel::OnRenderUI() {
         ImGuiIO& io = ImGui::GetIO();
         float menu_bar_height = ImGui::GetFrameHeight();
-        float sidebar_width = 340.0f;
+        float sidebar_width = m_PanelWidth;
         float sidebar_height = io.DisplaySize.y - menu_bar_height;
+
         ImGui::SetNextWindowSize(ImVec2(sidebar_width, sidebar_height));
-        ImGui::SetNextWindowPos(ImVec2(0, menu_bar_height));
+        ImGui::SetNextWindowPos(ImVec2(0.0f, menu_bar_height));
+
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | 
                                  ImGuiWindowFlags_NoResize |
                                  ImGuiWindowFlags_NoCollapse |
@@ -36,14 +39,21 @@ namespace GraphLab::UI {
             ImGui::PushID(exp.id);
             ImGui::Checkbox("##visible", &exp.visible);
             ImGui::SameLine();
+            
             ImGuiColorEditFlags color_flags = ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoAlpha;
             ImGui::ColorEdit4("##color", (float*)&exp.color, color_flags);
             ImGui::SameLine();
+
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 30.0f);
-            ImGui::InputText("##expr", exp.expression, sizeof(exp.expression));
+            if (ImGui::InputText("##expr", exp.name, sizeof(exp.name))) {
+                // Recompile math parser when text changes
+                exp.Recompile();
+            }
+
             ImGui::SameLine();
             if (ImGui::Button("X", ImVec2(22.0f, 22.0f)))
                 id_to_remove = exp.id;
+
             ImGui::PopID();
         }
 
@@ -55,15 +65,12 @@ namespace GraphLab::UI {
     }
 
     void SidebarPanel::AddExpression(const std::string& expr) {
-        Expression exp;
-        exp.id = m_NextId++;
-        snprintf(exp.expression, sizeof(exp.expression), "%s", expr.c_str());
-        exp.visible = true;
-
         float r = 0.3f + (float)rand() / (float)RAND_MAX * 0.7f;
         float g = 0.3f + (float)rand() / (float)RAND_MAX * 0.7f;
         float b = 0.3f + (float)rand() / (float)RAND_MAX * 0.7f;
-        exp.color = ImVec4(r, g, b, 1.0f);
+        ImVec4 color = ImVec4(r, g, b, 1.0f);
+
+        Math::Expression exp(m_NextId++, expr, color);
         m_Expressions.push_back(exp);
     }
 

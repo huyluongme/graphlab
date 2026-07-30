@@ -1,16 +1,11 @@
 #pragma once
 
 #include "imgui.h"
+#include "math/expression.h"
 #include <string>
 #include <vector>
 
 namespace GraphLab::UI {
-    struct Expression {
-        int id;
-        char expression[256];
-        bool visible;
-        ImVec4 color;
-    };
 
     class SidebarPanel {
     public:
@@ -18,13 +13,13 @@ namespace GraphLab::UI {
         ~SidebarPanel() = default;
 
         void OnRenderUI();
-        const std::vector<Expression>& GetExpressions() const { return m_Expressions; }
+        const std::vector<Math::Expression>& GetExpressions() const { return m_Expressions; }
         void AddExpression(const std::string& expr = "");
         void RemoveExpression(int id);
         float GetPanelWidth() const { return m_PanelWidth; }
 
     private:
-        std::vector<Expression> m_Expressions;
+        std::vector<Math::Expression> m_Expressions;
         int m_NextId = 1;
         float m_PanelWidth = 340.0f;
     };

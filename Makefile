@@ -14,7 +14,8 @@ SOURCES = src/main.cpp \
           src/ui/main_menu_bar.cpp \
           src/ui/sidebar_panel.cpp \
           src/ui/graph_canvas.cpp \
-          src/math/evaluator.cpp
+          src/math/evaluator.cpp \
+          src/math/expression.cpp
 
 SOURCES += $(IMGUI_DIR)/imgui.cpp \
            $(IMGUI_DIR)/imgui_demo.cpp \
