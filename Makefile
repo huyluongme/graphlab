@@ -9,7 +9,12 @@ BIN_DIR = $(BUILD_DIR)/bin
 IMGUI_DIR = thirdparty/imgui
 GLFW_DIR = thirdparty/glfw
 
-SOURCES = src/main.cpp src/core/app.cpp src/ui/main_menu_bar.cpp src/ui/sidebar_panel.cpp
+SOURCES = src/main.cpp \
+          src/core/app.cpp \
+          src/ui/main_menu_bar.cpp \
+          src/ui/sidebar_panel.cpp \
+          src/ui/graph_canvas.cpp
+
 SOURCES += $(IMGUI_DIR)/imgui.cpp \
            $(IMGUI_DIR)/imgui_demo.cpp \
            $(IMGUI_DIR)/imgui_draw.cpp \

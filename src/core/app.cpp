@@ -202,6 +202,9 @@ namespace GraphLab {
 
         // 2. Render Sidebar Panel
         m_SidebarPanel.OnRenderUI();
+
+        // 3. Render Graph Canvas
+        m_GraphCanvas.OnRenderUI();
     }
 
     void App::Shutdown() {

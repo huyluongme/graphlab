@@ -2,6 +2,7 @@
 
 #include "ui/main_menu_bar.h"
 #include "ui/sidebar_panel.h"
+#include "ui/graph_canvas.h"
 #include <string>
 #include <cstdint>
 
@@ -45,6 +46,9 @@ namespace GraphLab {
         const UI::SidebarPanel& GetSidebarPanel() const { return m_SidebarPanel; }
         UI::SidebarPanel& GetSidebarPanel() { return m_SidebarPanel; }
 
+        UI::GraphCanvas& GetGraphCanvas() { return m_GraphCanvas; }
+        const UI::GraphCanvas& GetGraphCanvas() const { return m_GraphCanvas; }
+
     private:
         bool Init();
         void SetAppIcon();
@@ -59,6 +63,7 @@ namespace GraphLab {
 
         UI::MainMenuBar m_MainMenuBar;
         UI::SidebarPanel m_SidebarPanel;
+        UI::GraphCanvas m_GraphCanvas;
 
         static App* s_Instance;
     };
