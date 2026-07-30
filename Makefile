@@ -13,7 +13,8 @@ SOURCES = src/main.cpp \
           src/core/app.cpp \
           src/ui/main_menu_bar.cpp \
           src/ui/sidebar_panel.cpp \
-          src/ui/graph_canvas.cpp
+          src/ui/graph_canvas.cpp \
+          src/math/evaluator.cpp
 
 SOURCES += $(IMGUI_DIR)/imgui.cpp \
            $(IMGUI_DIR)/imgui_demo.cpp \
@@ -78,6 +79,9 @@ $(OBJ_DIR)/%.o: src/core/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(OBJ_DIR)/%.o: src/ui/%.cpp | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(OBJ_DIR)/%.o: src/math/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(OBJ_DIR)/%.o: $(IMGUI_DIR)/%.cpp | $(OBJ_DIR)
