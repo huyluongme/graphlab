@@ -60,9 +60,14 @@ namespace GraphLab::UI {
         // Render UI controls
         ImGui::SetCursorPos(ImVec2(15.0f, 15.0f));
         ImGui::BeginGroup();
-        ImGui::TextDisabled("FPS: %.1f | Frame: %.2f ms | Zoom: %.1f px/unit", io.Framerate, 1000.0f / std::max(io.Framerate, 1.0f), m_Zoom);
+
         if (ImGui::Button("Reset View (1:1)"))
             ResetView();
+
+        ImGui::TextDisabled("FPS: %.1f", io.Framerate);
+        ImGui::TextDisabled("Frame: %.2f ms", 1000.0f / std::max(io.Framerate, 1.0f));
+        ImGui::TextDisabled("Zoom: %.1f", m_Zoom);
+        ImGui::TextDisabled("Pan: (%.2f, %.2f)", m_PanOffset.x, m_PanOffset.y);
 
         ImGui::EndGroup();
         ImGui::End();
