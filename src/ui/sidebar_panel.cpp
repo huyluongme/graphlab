@@ -2,7 +2,9 @@
 #include <cstdlib>
 
 namespace GraphLab::UI {
-    SidebarPanel::SidebarPanel() {}
+    SidebarPanel::SidebarPanel() {
+        AddExpression("(x^2 + y^2 - 1)^3 - x^2 * y^3");
+    }
 
     void SidebarPanel::OnRenderUI() {
         ImGuiIO& io = ImGui::GetIO();

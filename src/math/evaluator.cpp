@@ -46,15 +46,41 @@ namespace GraphLab::Math {
         m_Expression = expression;
         m_LastError.clear();
         m_IsValid = false;
+        m_IsEquation = false;
 
         if (expression.empty()) {
             m_LastError = "Expression is empty.";
             return false;
         }
 
-        std::vector<Token> tokens = Tokenize(expression);
+        std::string normalizedExpression = expression;
+        const size_t equalPos = normalizedExpression.find('=');
+
+        if (equalPos != std::string::npos) {
+            m_IsEquation = true;
+
+            // Reject multiple '=' characters.
+            if (normalizedExpression.find('=', equalPos + 1) != std::string::npos) {
+                m_LastError = "Only one '=' operator is supported.";
+                return false;
+            }
+
+            std::string left = normalizedExpression.substr(0, equalPos);
+            std::string right = normalizedExpression.substr(equalPos + 1);
+
+            if (left.find_first_not_of(" \t\r\n") == std::string::npos ||
+                right.find_first_not_of(" \t\r\n") == std::string::npos) {
+                m_LastError = "Both sides of the equation are required.";
+                return false;
+            }
+
+            normalizedExpression = "(" + left + ")-(" + right + ")";
+        }
+
+        std::vector<Token> tokens = Tokenize(normalizedExpression);
         if (tokens.empty()) {
-            m_LastError = "Failed to tokenize expression.";
+            if (m_LastError.empty())
+                m_LastError = "Failed to tokenize expression.";
             return false;
         }
 
@@ -84,18 +110,22 @@ namespace GraphLab::Math {
         double valStack[64];
         int stackPtr = 0;
 
+        auto push = [&](double val) {
+            if (stackPtr < 64) valStack[stackPtr++] = val;
+        };
+
         for (const auto& token : m_RPNTokens) {
             switch (token.type) {
                 case TokenType::Number:
-                    valStack[stackPtr++] = token.numberValue;
+                    push(token.numberValue);
                     break;
 
                 case TokenType::VariableX:
-                    valStack[stackPtr++] = x;
+                    push(x);
                     break;
 
                 case TokenType::VariableY:
-                    valStack[stackPtr++] = y;
+                    push(y);
                     break;
 
                 case TokenType::Operator: {
@@ -179,7 +209,11 @@ namespace GraphLab::Math {
                 else if (id == "pi")      tokens.emplace_back(TokenType::Number, "pi", M_PI);
                 else if (id == "e")       tokens.emplace_back(TokenType::Number, "e", M_E);
                 else if (IsFunction(id))  tokens.emplace_back(TokenType::Function, id);
-                else                      tokens.emplace_back(TokenType::VariableX, "x");
+                else {
+                    m_IsValid = false;
+                    m_LastError = "Unknown identifier: '" + id + "'";
+                    return {};
+                }
             }
             // 3. Operators (+, -, *, /, ^)
             else if (IsOperator(c)) {
@@ -193,7 +227,10 @@ namespace GraphLab::Math {
             // 4. Parentheses
             else if (c == '(') { tokens.emplace_back(TokenType::LeftParen, "("); i++; }
             else if (c == ')') { tokens.emplace_back(TokenType::RightParen, ")"); i++; }
-            else { i++; }
+            else {
+                m_LastError = std::string("Unexpected character: '") + c + "'";
+                return {};
+            }
         }
 
         return tokens;

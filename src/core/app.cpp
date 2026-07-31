@@ -146,6 +146,8 @@ namespace GraphLab {
         float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
         ImGuiStyle& style = ImGui::GetStyle();
         style.ScaleAllSizes(main_scale);
+        style.AntiAliasedLines = true;
+        style.AntiAliasedLinesUseTex = true;
 
         // Load Inter-Medium font with full Vietnamese Unicode glyph ranges
         const ImWchar* vietnamese_ranges = io.Fonts->GetGlyphRangesVietnamese();

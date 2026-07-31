@@ -69,6 +69,7 @@ namespace GraphLab::Math {
 
         bool IsValid() const { return m_IsValid; }
         bool IsImplicit() const { return m_IsImplicit; }
+        bool IsEquation() const { return m_IsEquation; }
         const std::string& GetError() const { return m_LastError; }
         const std::string& GetExpression() const { return m_Expression; }
 
@@ -88,6 +89,7 @@ namespace GraphLab::Math {
         std::vector<Token> m_RPNTokens;
         bool m_IsValid = false;
         bool m_IsImplicit = false;
+        bool m_IsEquation = false;
         std::string m_LastError;
     };
 }

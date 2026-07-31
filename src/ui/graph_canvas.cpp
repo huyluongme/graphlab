@@ -4,6 +4,10 @@
 
 #include <cmath>
 #include <algorithm>
+#include <vector>
+#include <deque>
+#include <functional>
+#include <unordered_map>
 
 namespace GraphLab::UI {
     GraphCanvas::GraphCanvas() {}
@@ -50,10 +54,13 @@ namespace GraphLab::UI {
         // Draw the grid and axes
         DrawGridAndAxes(drawList, canvasPos, canvasSize, originScreen);
 
+        // Render mathematical expressions dynamically from Sidebar
+        DrawExpressions(drawList, canvasPos, canvasSize, originScreen);
+
         // Render UI controls
         ImGui::SetCursorPos(ImVec2(15.0f, 15.0f));
         ImGui::BeginGroup();
-        ImGui::TextDisabled("Zoom: %.1f px/unit | Scroll: Zoom | Drag: Pan", m_Zoom);
+        ImGui::TextDisabled("FPS: %.1f | Frame: %.2f ms | Zoom: %.1f px/unit", io.Framerate, 1000.0f / std::max(io.Framerate, 1.0f), m_Zoom);
         if (ImGui::Button("Reset View (1:1)"))
             ResetView();
 
@@ -111,6 +118,7 @@ namespace GraphLab::UI {
         if (isHovered && io.MouseWheel != 0.0f) {
             float zoomFactor = (io.MouseWheel > 0.0f) ? 1.15f : (1.0f / 1.15f);
             m_Zoom = std::clamp(m_Zoom * zoomFactor, 5.0f, 1000.0f);
+            m_LastInteractionTime = static_cast<float>(ImGui::GetTime());
         }
 
         // Handle mouse click for panning
@@ -119,10 +127,12 @@ namespace GraphLab::UI {
             m_IsDragging = true;
             m_DragStartMouse = mousePos;
             m_DragStartPan = m_PanOffset;
+            m_LastInteractionTime = static_cast<float>(ImGui::GetTime());
         }
 
         // Handle mouse release for panning
         if (m_IsDragging) {
+            m_LastInteractionTime = static_cast<float>(ImGui::GetTime());
             if (ImGui::IsMouseDown(ImGuiMouseButton_Left)
                 || ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
                 ImVec2 delta = ImVec2(
@@ -198,5 +208,378 @@ namespace GraphLab::UI {
 
         // Draw Origin Label (0)
         drawList->AddText(ImVec2(originScreen.x + 5.0f, originScreen.y + 5.0f), textColor, "0");
+    }
+
+    /**
+     * @brief Loops over visible equations in SidebarPanel and renders each one.
+     */
+    void GraphCanvas::DrawExpressions(ImDrawList* drawList, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen) {
+        const auto& expressions = App::Get().GetSidebarPanel().GetExpressions();
+
+        for (const auto& exp : expressions) {
+            if (!exp.visible || !exp.evaluator.IsValid())
+                continue;
+
+            ImU32 color = ImGui::ColorConvertFloat4ToU32(exp.color);
+
+            if (exp.evaluator.IsEquation() || exp.evaluator.IsImplicit()) {
+                DrawImplicitFunction(drawList, exp.evaluator, color, canvasPos, canvasSize, originScreen);
+            } else {
+                DrawExplicitFunction(drawList, exp.evaluator, color, canvasPos, canvasSize, originScreen);
+            }
+        }
+    }
+
+    /**
+     * @brief Renders 1D explicit function y = f(x) by sampling horizontal screen columns.
+     */
+    void GraphCanvas::DrawExplicitFunction(ImDrawList* drawList, const Math::Evaluator& evaluator, ImU32 color, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen) {
+        float startX = canvasPos.x;
+        float endX = canvasPos.x + canvasSize.x;
+        float step = 2.0f; // 2 pixels sampling step
+
+        std::vector<ImVec2> points;
+        points.reserve((size_t)((endX - startX) / step) + 2);
+
+        for (float screenX = startX; screenX <= endX; screenX += step) {
+            float worldX = (screenX - originScreen.x) / m_Zoom;
+            double worldY = evaluator.Evaluate(worldX);
+
+            if (std::isnan(worldY) || std::isinf(worldY)) {
+                if (points.size() > 1) {
+                    drawList->AddPolyline(points.data(), (int)points.size(), color, 0, 2.5f);
+                }
+                points.clear();
+                continue;
+            }
+
+            float screenY = originScreen.y - (float)worldY * m_Zoom;
+
+            // Handle vertical asymptotic discontinuities (e.g. 1/x or tan(x))
+            if (!points.empty()) {
+                float lastY = points.back().y;
+                if (std::abs(screenY - lastY) > canvasSize.y * 1.5f) {
+                    if (points.size() > 1) {
+                        drawList->AddPolyline(points.data(), (int)points.size(), color, 0, 2.5f);
+                    }
+                    points.clear();
+                }
+            }
+
+            points.push_back(ImVec2(screenX, screenY));
+        }
+
+        if (points.size() > 1) {
+            drawList->AddPolyline(points.data(), (int)points.size(), color, 0, 2.5f);
+        }
+    }
+
+
+    /**
+     * @brief Renders 2D implicit function F(x, y) = 0 using a 3-Layer Architecture:
+     *  1. Evaluator: Evaluates F(x,y) for grid vertices exactly once.
+     *  2. ContourSampler: Origin-anchored grid + 4-iteration bisection refinement + EdgeKey topology.
+     *  3. GraphRenderer: World-coordinate render cache + ImGui AddPolyline with smooth miter joins.
+     */
+    void GraphCanvas::DrawImplicitFunction(ImDrawList* drawList, const Math::Evaluator& evaluator, ImU32 color, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen) {
+
+        const std::string& exprStr = evaluator.GetExpression();
+        auto& cache = m_ImplicitCaches[exprStr];
+
+        float now = static_cast<float>(ImGui::GetTime());
+        bool interacting = m_IsDragging || (now - m_LastInteractionTime < 0.15f);
+
+        bool needsRebuild = !cache.valid
+                         || (!interacting && (cache.sampledZoom != m_Zoom || cache.sampledCanvasSize.x != canvasSize.x || cache.sampledCanvasSize.y != canvasSize.y));
+
+        if (needsRebuild) {
+            constexpr float cellSize = 2.0f;
+
+            // 1. Anchor Grid to world coordinate origin (originScreen)
+            float gridStartX = originScreen.x + std::floor((canvasPos.x - originScreen.x) / cellSize) * cellSize;
+            float gridStartY = originScreen.y + std::floor((canvasPos.y - originScreen.y) / cellSize) * cellSize;
+
+            int cols = static_cast<int>(std::ceil((canvasPos.x + canvasSize.x - gridStartX) / cellSize)) + 1;
+            int rows = static_cast<int>(std::ceil((canvasPos.y + canvasSize.y - gridStartY) / cellSize)) + 1;
+
+            if (cols >= 2 && rows >= 2) {
+                // 2. Evaluate grid vertices EXACTLY ONCE
+                std::vector<double> values(static_cast<size_t>(cols) * rows);
+                auto ValueAt = [&](int x, int y) -> double& {
+                    return values[static_cast<size_t>(y) * cols + x];
+                };
+
+                for (int y = 0; y < rows; ++y) {
+                    float screenY = gridStartY + static_cast<float>(y) * cellSize;
+                    double worldY = (originScreen.y - screenY) / m_Zoom;
+                    for (int x = 0; x < cols; ++x) {
+                        float screenX = gridStartX + static_cast<float>(x) * cellSize;
+                        double worldX = (screenX - originScreen.x) / m_Zoom;
+                        ValueAt(x, y) = evaluator.Evaluate(worldX, worldY);
+                    }
+                }
+
+                // 3. Root refinement: Linear interpolation initial guess + 4 bisection iterations
+                auto RefineZero = [&](ImVec2 pA, ImVec2 pB, double fA, double fB) -> ImVec2 {
+                    if (!std::isfinite(fA) || !std::isfinite(fB))
+                        return ImVec2((pA.x + pB.x) * 0.5f, (pA.y + pB.y) * 0.5f);
+
+                    ImVec2 a = pA, b = pB;
+                    double fa = fA, fb = fB;
+
+                    double denominator = fa - fb;
+                    double t = 0.5;
+                    if (std::abs(denominator) > 1e-15)
+                        t = std::clamp(fa / denominator, 0.0, 1.0);
+
+                    ImVec2 estimate(
+                        a.x + static_cast<float>(t) * (b.x - a.x),
+                        a.y + static_cast<float>(t) * (b.y - a.y)
+                    );
+
+                    for (int iter = 0; iter < 4; ++iter) {
+                        ImVec2 midpoint((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f);
+                        double worldX = (midpoint.x - originScreen.x) / m_Zoom;
+                        double worldY = (originScreen.y - midpoint.y) / m_Zoom;
+                        double fm = evaluator.Evaluate(worldX, worldY);
+
+                        if (!std::isfinite(fm)) break;
+
+                        if (std::signbit(fa) == std::signbit(fm)) {
+                            a = midpoint;
+                            fa = fm;
+                        } else {
+                            b = midpoint;
+                            fb = fm;
+                        }
+                    }
+
+                    ImVec2 refined((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f);
+                    float intervalLength = std::hypot(b.x - a.x, b.y - a.y);
+                    return intervalLength < 0.4f ? refined : estimate;
+                };
+
+                // 4. EdgeKey topology
+                struct EdgeKey {
+                    int gx, gy, orient;
+                    bool operator==(const EdgeKey& o) const {
+                        return gx == o.gx && gy == o.gy && orient == o.orient;
+                    }
+                };
+
+                struct EdgeKeyHash {
+                    std::size_t operator()(const EdgeKey& k) const {
+                        return std::hash<uint64_t>()(((uint64_t)(uint32_t)k.gy * 8192ull + (uint32_t)k.gx) | ((uint64_t)k.orient << 32));
+                    }
+                };
+
+                std::unordered_map<EdgeKey, int, EdgeKeyHash> edgeToNode;
+                std::vector<ImVec2> nodeWorldPos;
+                std::vector<std::vector<int>> adj;
+                edgeToNode.reserve(4000);
+                nodeWorldPos.reserve(4000);
+                adj.reserve(4000);
+
+                auto GetNode = [&](EdgeKey key, ImVec2 pA, ImVec2 pB, double fA, double fB) -> int {
+                    auto it = edgeToNode.find(key);
+                    if (it != edgeToNode.end()) return it->second;
+                    int id = static_cast<int>(nodeWorldPos.size());
+                    ImVec2 screenPt = RefineZero(pA, pB, fA, fB);
+                    ImVec2 worldPt = ScreenToWorld(screenPt, originScreen);
+                    nodeWorldPos.push_back(worldPt);
+                    adj.push_back({});
+                    edgeToNode[key] = id;
+                    return id;
+                };
+
+                auto AddEdge = [&](int nA, int nB) {
+                    if (nA == nB) return;
+                    if (std::find(adj[nA].begin(), adj[nA].end(), nB) == adj[nA].end()) {
+                        adj[nA].push_back(nB);
+                        adj[nB].push_back(nA);
+                    }
+                };
+
+                struct EdgePair { int edgeA, edgeB; };
+                static constexpr EdgePair cases[16][2] = {
+                    {{-1, -1}, {-1, -1}}, // 0
+                    {{ 3,  0}, {-1, -1}}, // 1
+                    {{ 0,  1}, {-1, -1}}, // 2
+                    {{ 3,  1}, {-1, -1}}, // 3
+                    {{ 1,  2}, {-1, -1}}, // 4
+                    {{-1, -1}, {-1, -1}}, // 5
+                    {{ 0,  2}, {-1, -1}}, // 6
+                    {{ 3,  2}, {-1, -1}}, // 7
+                    {{ 2,  3}, {-1, -1}}, // 8
+                    {{ 2,  0}, {-1, -1}}, // 9
+                    {{-1, -1}, {-1, -1}}, // 10
+                    {{ 2,  1}, {-1, -1}}, // 11
+                    {{ 1,  3}, {-1, -1}}, // 12
+                    {{ 1,  0}, {-1, -1}}, // 13
+                    {{ 0,  3}, {-1, -1}}, // 14
+                    {{-1, -1}, {-1, -1}}  // 15
+                };
+
+                for (int y = 0; y < rows - 1; ++y) {
+                    float qy = gridStartY + static_cast<float>(y) * cellSize;
+                    for (int x = 0; x < cols - 1; ++x) {
+                        float qx = gridStartX + static_cast<float>(x) * cellSize;
+
+                        double fBL = ValueAt(x,     y + 1);
+                        double fBR = ValueAt(x + 1, y + 1);
+                        double fTR = ValueAt(x + 1, y    );
+                        double fTL = ValueAt(x,     y    );
+
+                        int ms = 0;
+                        if (!std::signbit(fBL)) ms |= 1;
+                        if (!std::signbit(fBR)) ms |= 2;
+                        if (!std::signbit(fTR)) ms |= 4;
+                        if (!std::signbit(fTL)) ms |= 8;
+
+                        if (ms == 0 || ms == 15) continue;
+
+                        ImVec2 pBL = { qx,            qy + cellSize };
+                        ImVec2 pBR = { qx + cellSize, qy + cellSize };
+                        ImVec2 pTR = { qx + cellSize, qy            };
+                        ImVec2 pTL = { qx,            qy            };
+
+                        EdgeKey kBot = { x,     y + 1, 0 };
+                        EdgeKey kTop = { x,     y,     0 };
+                        EdgeKey kLft = { x,     y,     1 };
+                        EdgeKey kRgt = { x + 1, y,     1 };
+
+                        auto nBot = [&]{ return GetNode(kBot, pBL, pBR, fBL, fBR); };
+                        auto nTop = [&]{ return GetNode(kTop, pTL, pTR, fTL, fTR); };
+                        auto nLft = [&]{ return GetNode(kLft, pTL, pBL, fTL, fBL); };
+                        auto nRgt = [&]{ return GetNode(kRgt, pTR, pBR, fTR, fBR); };
+
+                        auto GetNodeByEdge = [&](int edge) -> int {
+                            switch (edge) {
+                                case 0: return nBot();
+                                case 1: return nRgt();
+                                case 2: return nTop();
+                                case 3: return nLft();
+                                default: return nBot();
+                            }
+                        };
+
+                        auto AddSegmentByEdges = [&](int eA, int eB) {
+                            AddEdge(GetNodeByEdge(eA), GetNodeByEdge(eB));
+                        };
+
+                        if (ms == 5) {
+                            double det = fBL * fTR - fBR * fTL;
+                            if (det > 0.0) {
+                                AddSegmentByEdges(3, 2);
+                                AddSegmentByEdges(0, 1);
+                            } else {
+                                AddSegmentByEdges(3, 0);
+                                AddSegmentByEdges(1, 2);
+                            }
+                        } else if (ms == 10) {
+                            double det = fBL * fTR - fBR * fTL;
+                            if (det > 0.0) {
+                                AddSegmentByEdges(3, 0);
+                                AddSegmentByEdges(1, 2);
+                            } else {
+                                AddSegmentByEdges(3, 2);
+                                AddSegmentByEdges(0, 1);
+                            }
+                        } else {
+                            const auto& p = cases[ms][0];
+                            if (p.edgeA != -1 && p.edgeB != -1) {
+                                AddSegmentByEdges(p.edgeA, p.edgeB);
+                            }
+                        }
+                    }
+                }
+
+                // 5. Build CachedPolylines with consecutive duplicate filtering
+                cache.polylines.clear();
+                std::vector<bool> visited(nodeWorldPos.size(), false);
+
+                for (int start = 0; start < static_cast<int>(nodeWorldPos.size()); ++start) {
+                    if (visited[start] || adj[start].empty()) continue;
+
+                    std::deque<int> chain;
+                    chain.push_back(start);
+                    visited[start] = true;
+
+                    auto grow = [&](bool forward) {
+                        while (true) {
+                            int tip = forward ? chain.back() : chain.front();
+                            int next = -1;
+                            for (int nb : adj[tip]) {
+                                if (!visited[nb]) { next = nb; break; }
+                            }
+                            if (next == -1) break;
+                            visited[next] = true;
+                            if (forward) chain.push_back(next); else chain.push_front(next);
+                        }
+                    };
+
+                    grow(true);
+                    grow(false);
+
+                    if (chain.size() < 2) continue;
+
+                    bool isClosed = false;
+                    for (int nb : adj[chain.back()]) {
+                        if (nb == chain.front()) {
+                            isClosed = true;
+                            break;
+                        }
+                    }
+
+                    CachedPolyline cPoly;
+                    cPoly.closed = isClosed;
+                    cPoly.worldPoints.reserve(chain.size());
+
+                    constexpr float minDistanceSquared = 0.01f; // Filter sub-pixel duplicates
+
+                    for (int id : chain) {
+                        const ImVec2& wPt = nodeWorldPos[id];
+                        if (!cPoly.worldPoints.empty()) {
+                            ImVec2 lastScreen = WorldToScreen(cPoly.worldPoints.back(), originScreen);
+                            ImVec2 currScreen = WorldToScreen(wPt, originScreen);
+                            float dx = currScreen.x - lastScreen.x;
+                            float dy = currScreen.y - lastScreen.y;
+                            if (dx * dx + dy * dy < minDistanceSquared)
+                                continue;
+                        }
+                        cPoly.worldPoints.push_back(wPt);
+                    }
+
+                    if (cPoly.worldPoints.size() >= 2) {
+                        cache.polylines.push_back(std::move(cPoly));
+                    }
+                }
+
+                cache.sampledZoom = m_Zoom;
+                cache.sampledCanvasSize = canvasSize;
+                cache.valid = true;
+            }
+        }
+
+        // 6. Render cached polylines by transforming worldPoints to screen coordinates
+        std::vector<ImVec2> screenPoints;
+        for (const auto& poly : cache.polylines) {
+            if (poly.worldPoints.size() < 2) continue;
+
+            screenPoints.clear();
+            screenPoints.reserve(poly.worldPoints.size());
+
+            for (const auto& wPt : poly.worldPoints) {
+                screenPoints.push_back(WorldToScreen(wPt, originScreen));
+            }
+
+            drawList->AddPolyline(
+                screenPoints.data(),
+                static_cast<int>(screenPoints.size()),
+                color,
+                poly.closed ? ImDrawFlags_Closed : ImDrawFlags_None,
+                2.0f
+            );
+        }
     }
 }
