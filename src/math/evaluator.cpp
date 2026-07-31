@@ -20,12 +20,24 @@ namespace GraphLab::Math {
         return c == '+' || c == '-' || c == '*' || c == '/' || c == '^';
     }
 
-    static bool IsFunction(const std::string& str) {
-        static const std::vector<std::string> funcs = {
-            "sin", "cos", "tan", "asin", "acos", "atan",
-            "sqrt", "cbrt", "abs", "exp", "ln", "log", "floor", "ceil"
-        };
-        return std::find(funcs.begin(), funcs.end(), str) != funcs.end();
+    static const std::vector<std::string> g_Functions = {
+        "asin", "acos", "atan", "sqrt", "cbrt", "floor", "ceil",
+        "sin", "cos", "tan", "abs", "exp", "log", "ln"
+    };
+
+    static bool CanEndFactor(Evaluator::TokenType type) {
+        return type == Evaluator::TokenType::Number ||
+               type == Evaluator::TokenType::VariableX ||
+               type == Evaluator::TokenType::VariableY ||
+               type == Evaluator::TokenType::RightParen;
+    }
+
+    static bool CanStartFactor(Evaluator::TokenType type) {
+        return type == Evaluator::TokenType::Number ||
+               type == Evaluator::TokenType::VariableX ||
+               type == Evaluator::TokenType::VariableY ||
+               type == Evaluator::TokenType::Function ||
+               type == Evaluator::TokenType::LeftParen;
     }
 
     static int GetPrecedence(char op) {
@@ -182,6 +194,13 @@ namespace GraphLab::Math {
         size_t len = expression.length();
         m_IsImplicit = false;
 
+        auto addToken = [&](Token newToken) {
+            if (!tokens.empty() && CanEndFactor(tokens.back().type) && CanStartFactor(newToken.type)) {
+                tokens.emplace_back(TokenType::Operator, "*", 0.0, GetPrecedence('*'), false);
+            }
+            tokens.push_back(newToken);
+        };
+
         while (i < len) {
             char c = expression[i];
 
@@ -195,38 +214,89 @@ namespace GraphLab::Math {
                 size_t start = i;
                 while (i < len && (std::isdigit(expression[i]) || expression[i] == '.')) i++;
                 std::string numStr = expression.substr(start, i - start);
-                tokens.emplace_back(TokenType::Number, numStr, std::stod(numStr));
+                addToken(Token(TokenType::Number, numStr, std::stod(numStr)));
             }
-            // 2. Identifiers (x, y, pi, e, sin, cos...)
+            // 2. Identifiers (x, y, pi, e, sin, cos, sinx, cosx...)
             else if (std::isalpha(c)) {
                 size_t start = i;
                 while (i < len && std::isalpha(expression[i])) i++;
                 std::string id = expression.substr(start, i - start);
                 std::transform(id.begin(), id.end(), id.begin(), ::tolower);
 
-                if (id == "x")            tokens.emplace_back(TokenType::VariableX, "x");
-                else if (id == "y")       { m_IsImplicit = true; tokens.emplace_back(TokenType::VariableY, "y"); }
-                else if (id == "pi")      tokens.emplace_back(TokenType::Number, "pi", M_PI);
-                else if (id == "e")       tokens.emplace_back(TokenType::Number, "e", M_E);
-                else if (IsFunction(id))  tokens.emplace_back(TokenType::Function, id);
-                else {
-                    m_IsValid = false;
-                    m_LastError = "Unknown identifier: '" + id + "'";
-                    return {};
+                size_t pos = 0;
+                size_t idLen = id.length();
+
+                while (pos < idLen) {
+                    std::string sub = id.substr(pos);
+
+                    if (sub == "x") {
+                        addToken(Token(TokenType::VariableX, "x"));
+                        pos += 1;
+                    }
+                    else if (sub == "y") {
+                        m_IsImplicit = true;
+                        addToken(Token(TokenType::VariableY, "y"));
+                        pos += 1;
+                    }
+                    else if (sub == "pi") {
+                        addToken(Token(TokenType::Number, "pi", M_PI));
+                        pos += 2;
+                    }
+                    else if (sub == "e") {
+                        addToken(Token(TokenType::Number, "e", M_E));
+                        pos += 1;
+                    }
+                    else {
+                        // Check functions (longest first)
+                        bool matchedFn = false;
+                        for (const auto& fn : g_Functions) {
+                            if (sub.compare(0, fn.length(), fn) == 0) {
+                                addToken(Token(TokenType::Function, fn, 0.0, 2));
+                                pos += fn.length();
+                                matchedFn = true;
+                                break;
+                            }
+                        }
+
+                        if (!matchedFn) {
+                            if (sub.compare(0, 2, "pi") == 0) {
+                                addToken(Token(TokenType::Number, "pi", M_PI));
+                                pos += 2;
+                            }
+                            else if (sub[0] == 'x') {
+                                addToken(Token(TokenType::VariableX, "x"));
+                                pos += 1;
+                            }
+                            else if (sub[0] == 'y') {
+                                m_IsImplicit = true;
+                                addToken(Token(TokenType::VariableY, "y"));
+                                pos += 1;
+                            }
+                            else if (sub[0] == 'e') {
+                                addToken(Token(TokenType::Number, "e", M_E));
+                                pos += 1;
+                            }
+                            else {
+                                m_IsValid = false;
+                                m_LastError = "Unknown identifier: '" + id + "'";
+                                return {};
+                            }
+                        }
+                    }
                 }
             }
             // 3. Operators (+, -, *, /, ^)
             else if (IsOperator(c)) {
                 // Handle Unary Minus (e.g., -x or (-5))
                 if (c == '-' && (tokens.empty() || tokens.back().type == TokenType::Operator || tokens.back().type == TokenType::LeftParen)) {
-                    tokens.emplace_back(TokenType::Number, "0", 0.0);
+                    addToken(Token(TokenType::Number, "0", 0.0));
                 }
-                tokens.emplace_back(TokenType::Operator, std::string(1, c), 0.0, GetPrecedence(c), c == '^');
+                addToken(Token(TokenType::Operator, std::string(1, c), 0.0, GetPrecedence(c), c == '^'));
                 i++;
             }
             // 4. Parentheses
-            else if (c == '(') { tokens.emplace_back(TokenType::LeftParen, "("); i++; }
-            else if (c == ')') { tokens.emplace_back(TokenType::RightParen, ")"); i++; }
+            else if (c == '(') { addToken(Token(TokenType::LeftParen, "(")); i++; }
+            else if (c == ')') { addToken(Token(TokenType::RightParen, ")")); i++; }
             else {
                 m_LastError = std::string("Unexpected character: '") + c + "'";
                 return {};
