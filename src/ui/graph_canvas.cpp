@@ -236,34 +236,89 @@ namespace GraphLab::UI {
     }
 
     /**
-     * @brief Renders 1D explicit function y = f(x) by sampling horizontal screen columns.
+     * @brief Renders 1D explicit function y = f(x) by sampling horizontal screen columns with sub-pixel domain bisection and asymptote handling.
      */
     void GraphCanvas::DrawExplicitFunction(ImDrawList* drawList, const Math::Evaluator& evaluator, ImU32 color, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen) {
         float startX = canvasPos.x;
         float endX = canvasPos.x + canvasSize.x;
-        float step = 2.0f; // 2 pixels sampling step
+        float step = 1.0f; // 1 pixel sampling step
+
+        float minY = canvasPos.y - 200.0f;
+        float maxY = canvasPos.y + canvasSize.y + 200.0f;
+
+        auto sampleWorld = [&](float sx, float& outClampedY) -> bool {
+            float wx = (sx - originScreen.x) / m_Zoom;
+            double wy = evaluator.Evaluate(wx);
+            if (std::isnan(wy) || std::isinf(wy)) return false;
+            float sy = originScreen.y - (float)wy * m_Zoom;
+            outClampedY = std::clamp(sy, minY, maxY);
+            return true;
+        };
 
         std::vector<ImVec2> points;
-        points.reserve((size_t)((endX - startX) / step) + 2);
+        points.reserve((size_t)(endX - startX) + 10);
+        bool wasValid = false;
 
         for (float screenX = startX; screenX <= endX; screenX += step) {
-            float worldX = (screenX - originScreen.x) / m_Zoom;
-            double worldY = evaluator.Evaluate(worldX);
+            float clampedY = 0.0f;
+            bool isValid = sampleWorld(screenX, clampedY);
 
-            if (std::isnan(worldY) || std::isinf(worldY)) {
+            if (isValid && !wasValid) {
+                // Sub-pixel bisection refinement for domain entry (e.g. x -> 0+ for log(x)^2 or sqrt(x))
+                float leftX = screenX - step;
+                float rightX = screenX;
+                float boundaryY = clampedY;
+
+                for (int iter = 0; iter < 10; ++iter) {
+                    float midX = (leftX + rightX) * 0.5f;
+                    float midY = 0.0f;
+                    if (sampleWorld(midX, midY)) {
+                        rightX = midX;
+                        boundaryY = midY;
+                    } else {
+                        leftX = midX;
+                    }
+                }
+                points.push_back(ImVec2(rightX, boundaryY));
+            }
+            else if (!isValid && wasValid) {
+                // Sub-pixel bisection refinement for domain exit
+                float leftX = screenX - step;
+                float rightX = screenX;
+                float boundaryY = points.back().y;
+
+                for (int iter = 0; iter < 10; ++iter) {
+                    float midX = (leftX + rightX) * 0.5f;
+                    float midY = 0.0f;
+                    if (sampleWorld(midX, midY)) {
+                        leftX = midX;
+                        boundaryY = midY;
+                    } else {
+                        rightX = midX;
+                    }
+                }
+                points.push_back(ImVec2(leftX, boundaryY));
                 if (points.size() > 1) {
                     drawList->AddPolyline(points.data(), (int)points.size(), color, 0, 2.5f);
                 }
                 points.clear();
+                wasValid = false;
                 continue;
             }
 
-            float screenY = originScreen.y - (float)worldY * m_Zoom;
+            if (!isValid) {
+                wasValid = false;
+                continue;
+            }
 
-            // Handle vertical asymptotic discontinuities (e.g. 1/x or tan(x))
             if (!points.empty()) {
                 float lastY = points.back().y;
-                if (std::abs(screenY - lastY) > canvasSize.y * 1.5f) {
+
+                // Detect true vertical asymptote jump (+inf to -inf or -inf to +inf)
+                bool isAsymptoteJump = (lastY <= minY + 10.0f && clampedY >= maxY - 10.0f) ||
+                                       (lastY >= maxY - 10.0f && clampedY <= minY + 10.0f);
+
+                if (isAsymptoteJump) {
                     if (points.size() > 1) {
                         drawList->AddPolyline(points.data(), (int)points.size(), color, 0, 2.5f);
                     }
@@ -271,7 +326,8 @@ namespace GraphLab::UI {
                 }
             }
 
-            points.push_back(ImVec2(screenX, screenY));
+            points.push_back(ImVec2(screenX, clampedY));
+            wasValid = true;
         }
 
         if (points.size() > 1) {

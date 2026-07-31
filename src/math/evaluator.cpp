@@ -21,7 +21,8 @@ namespace GraphLab::Math {
     }
 
     static const std::vector<std::string> g_Functions = {
-        "asin", "acos", "atan", "sqrt", "cbrt", "floor", "ceil",
+        "arcsin", "arccos", "arctan", "floor", "ceil",
+        "sqrt", "cbrt", "asin", "acos", "atan",
         "sin", "cos", "tan", "abs", "exp", "log", "ln"
     };
 
@@ -47,6 +48,122 @@ namespace GraphLab::Math {
         return 0;
     }
 
+    static std::string NormalizeUnicodeMath(const std::string& input) {
+        std::string out;
+        size_t i = 0;
+        size_t len = input.length();
+        bool inSuperscript = false;
+        bool inPipeAbs = false;
+
+        while (i < len) {
+            unsigned char c = (unsigned char)input[i];
+
+            if (c == '|') {
+                if (!inPipeAbs) {
+                    out += "abs(";
+                    inPipeAbs = true;
+                } else {
+                    out += ")";
+                    inPipeAbs = false;
+                }
+                i++;
+                continue;
+            }
+
+            // 2-byte UTF-8 sequences
+            if (c == 0xC2 && i + 1 < len) {
+                unsigned char c2 = (unsigned char)input[i + 1];
+                if (c2 == 0xB2) { // ²
+                    if (!inSuperscript) { out += "^2"; inSuperscript = true; } else { out += "2"; }
+                    i += 2; continue;
+                }
+                if (c2 == 0xB3) { // ³ or ³√
+                    if (i + 4 < len && (unsigned char)input[i + 2] == 0xE2 && (unsigned char)input[i + 3] == 0x88 && (unsigned char)input[i + 4] == 0x9A) {
+                        out += "cbrt"; inSuperscript = false; i += 5; continue;
+                    }
+                    if (!inSuperscript) { out += "^3"; inSuperscript = true; } else { out += "3"; }
+                    i += 2; continue;
+                }
+                if (c2 == 0xB9) { // ¹
+                    if (!inSuperscript) { out += "^1"; inSuperscript = true; } else { out += "1"; }
+                    i += 2; continue;
+                }
+                if (c2 == 0xB7) { // ·
+                    out += "*"; inSuperscript = false; i += 2; continue;
+                }
+            }
+            else if (c == 0xC3 && i + 1 < len) {
+                unsigned char c2 = (unsigned char)input[i + 1];
+                if (c2 == 0x97) { // ×
+                    out += "*"; inSuperscript = false; i += 2; continue;
+                }
+                if (c2 == 0xB7) { // ÷
+                    out += "/"; inSuperscript = false; i += 2; continue;
+                }
+            }
+            else if (c == 0xCF && i + 1 < len && (unsigned char)input[i + 1] == 0x80) { // π
+                out += "pi"; inSuperscript = false; i += 2; continue;
+            }
+            else if (c == 0xCE && i + 1 < len && (unsigned char)input[i + 1] == 0xB8) { // θ
+                out += "theta"; inSuperscript = false; i += 2; continue;
+            }
+            // 3-byte UTF-8 sequences (E2 81 xx for superscripts, E2 88 9A for sqrt, E2 89 xx for operators)
+            else if (c == 0xE2 && i + 2 < len) {
+                unsigned char c2 = (unsigned char)input[i + 1];
+                unsigned char c3 = (unsigned char)input[i + 2];
+
+                if (c2 == 0x81) {
+                    if (c3 == 0xB0) { // ⁰
+                        if (!inSuperscript) { out += "^0"; inSuperscript = true; } else { out += "0"; }
+                        i += 3; continue;
+                    }
+                    if (c3 >= 0xB4 && c3 <= 0xB9) { // ⁴ ⁵ ⁶ ⁷ ⁸ ⁹
+                        char digit = '4' + (c3 - 0xB4);
+                        if (!inSuperscript) { out += "^"; out += digit; inSuperscript = true; } else { out += digit; }
+                        i += 3; continue;
+                    }
+                    if (c3 == 0xBA) { // ⁺
+                        if (!inSuperscript) { out += "^+"; inSuperscript = true; } else { out += "+"; }
+                        i += 3; continue;
+                    }
+                    if (c3 == 0xBB) { // ⁻
+                        if (!inSuperscript) { out += "^-"; inSuperscript = true; } else { out += "-"; }
+                        i += 3; continue;
+                    }
+                    if (c3 == 0xBF) { // ⁿ
+                        if (!inSuperscript) { out += "^n"; inSuperscript = true; } else { out += "n"; }
+                        i += 3; continue;
+                    }
+                }
+                else if (c2 == 0x88 && c3 == 0x9A) { // √
+                    out += "sqrt"; inSuperscript = false; i += 3; continue;
+                }
+                else if (c2 == 0x88 && c3 == 0x9B) { // ∛
+                    out += "cbrt"; inSuperscript = false; i += 3; continue;
+                }
+                else if (c2 == 0x89) {
+                    if (c3 == 0xA5) { // ≥
+                        out += ">="; inSuperscript = false; i += 3; continue;
+                    }
+                    if (c3 == 0xA4) { // ≤
+                        out += "<="; inSuperscript = false; i += 3; continue;
+                    }
+                    if (c3 == 0xA0) { // ≠
+                        out += "!="; inSuperscript = false; i += 3; continue;
+                    }
+                }
+            }
+
+            out += input[i];
+            if (input[i] != '^' && !std::isalnum((unsigned char)input[i])) {
+                inSuperscript = false;
+            }
+            i++;
+        }
+
+        return out;
+    }
+
     Evaluator::Evaluator(const std::string& expression) {
         Parse(expression);
     }
@@ -65,7 +182,7 @@ namespace GraphLab::Math {
             return false;
         }
 
-        std::string normalizedExpression = expression;
+        std::string normalizedExpression = NormalizeUnicodeMath(expression);
         const size_t equalPos = normalizedExpression.find('=');
 
         if (equalPos != std::string::npos) {
@@ -158,22 +275,22 @@ namespace GraphLab::Math {
                 case TokenType::Function: {
                     if (stackPtr < 1) return std::numeric_limits<double>::quiet_NaN();
                     double arg = valStack[stackPtr - 1];
-                    
+
                     const std::string& fn = token.value;
-                    if (fn == "sin")        valStack[stackPtr - 1] = std::sin(arg);
-                    else if (fn == "cos")   valStack[stackPtr - 1] = std::cos(arg);
-                    else if (fn == "tan")   valStack[stackPtr - 1] = std::tan(arg);
-                    else if (fn == "asin")  valStack[stackPtr - 1] = std::asin(arg);
-                    else if (fn == "acos")  valStack[stackPtr - 1] = std::acos(arg);
-                    else if (fn == "atan")  valStack[stackPtr - 1] = std::atan(arg);
-                    else if (fn == "sqrt")  valStack[stackPtr - 1] = (arg >= 0.0) ? std::sqrt(arg) : std::numeric_limits<double>::quiet_NaN();
-                    else if (fn == "cbrt")  valStack[stackPtr - 1] = std::cbrt(arg);
-                    else if (fn == "abs")   valStack[stackPtr - 1] = std::abs(arg);
-                    else if (fn == "exp")   valStack[stackPtr - 1] = std::exp(arg);
-                    else if (fn == "ln")    valStack[stackPtr - 1] = (arg > 0.0) ? std::log(arg) : std::numeric_limits<double>::quiet_NaN();
-                    else if (fn == "log")   valStack[stackPtr - 1] = (arg > 0.0) ? std::log10(arg) : std::numeric_limits<double>::quiet_NaN();
-                    else if (fn == "floor") valStack[stackPtr - 1] = std::floor(arg);
-                    else if (fn == "ceil")  valStack[stackPtr - 1] = std::ceil(arg);
+                    if (fn == "sin")                          valStack[stackPtr - 1] = std::sin(arg);
+                    else if (fn == "cos")                     valStack[stackPtr - 1] = std::cos(arg);
+                    else if (fn == "tan")                     valStack[stackPtr - 1] = std::tan(arg);
+                    else if (fn == "asin" || fn == "arcsin")  valStack[stackPtr - 1] = std::asin(arg);
+                    else if (fn == "acos" || fn == "arccos")  valStack[stackPtr - 1] = std::acos(arg);
+                    else if (fn == "atan" || fn == "arctan")  valStack[stackPtr - 1] = std::atan(arg);
+                    else if (fn == "sqrt")                    valStack[stackPtr - 1] = (arg >= 0.0) ? std::sqrt(arg) : std::numeric_limits<double>::quiet_NaN();
+                    else if (fn == "cbrt")                    valStack[stackPtr - 1] = std::cbrt(arg);
+                    else if (fn == "abs")                     valStack[stackPtr - 1] = std::abs(arg);
+                    else if (fn == "exp")                     valStack[stackPtr - 1] = std::exp(arg);
+                    else if (fn == "ln")                      valStack[stackPtr - 1] = (arg > 0.0) ? std::log(arg) : std::numeric_limits<double>::quiet_NaN();
+                    else if (fn == "log")                     valStack[stackPtr - 1] = (arg > 0.0) ? std::log10(arg) : std::numeric_limits<double>::quiet_NaN();
+                    else if (fn == "floor")                   valStack[stackPtr - 1] = std::floor(arg);
+                    else if (fn == "ceil")                    valStack[stackPtr - 1] = std::ceil(arg);
                     break;
                 }
 
