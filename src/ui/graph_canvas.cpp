@@ -129,19 +129,19 @@ namespace GraphLab::UI {
         ImGuiIO& io = ImGui::GetIO();
         ImVec2 mousePos = io.MousePos;
 
-        // Check if the mouse is hovering over the canvas (excluding overlay controls)
-        bool isHovered = (
+        // Check if the mouse is hovering over the canvas area
+        bool isCanvasAreaHovered = (
             mousePos.x >= canvasPos.x && mousePos.x <= canvasPos.x + canvasSize.x &&
             mousePos.y >= canvasPos.y && mousePos.y <= canvasPos.y + canvasSize.y
-        ) && !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive();
+        );
 
         ImVec2 originScreen(
             canvasPos.x + canvasSize.x * 0.5f + m_PanOffset.x,
             canvasPos.y + canvasSize.y * 0.5f + m_PanOffset.y
         );
 
-        // Cursor-Centered Zooming (Desmos style)
-        if (isHovered && io.MouseWheel != 0.0f) {
+        // Cursor-Centered Zooming (Desmos style) - works immediately even when input text box is active
+        if (isCanvasAreaHovered && io.MouseWheel != 0.0f) {
             float zoomFactor = (io.MouseWheel > 0.0f) ? 1.15f : (1.0f / 1.15f);
 
             ImVec2 mouseWorld = ScreenToWorld(mousePos, originScreen);
@@ -154,8 +154,9 @@ namespace GraphLab::UI {
             m_LastInteractionTime = static_cast<float>(ImGui::GetTime());
         }
 
-        // Mouse click & drag threshold (5px threshold so pin-clicking works reliably)
-        if (isHovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Middle))) {
+        // Mouse click & drag threshold (excluding click over overlay UI controls like Reset View)
+        bool isOverlayHovered = ImGui::IsAnyItemHovered();
+        if (isCanvasAreaHovered && !isOverlayHovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Middle))) {
             m_PotentialDrag = true;
             m_DragStartMouse = mousePos;
             m_DragStartPan = m_PanOffset;
@@ -254,10 +255,21 @@ namespace GraphLab::UI {
             ImU32 color = ImGui::ColorConvertFloat4ToU32(exp.color);
 
             if (exp.evaluator.IsEquation() || exp.evaluator.IsImplicit()) {
-                DrawImplicitFunction(drawList, exp.evaluator, color, canvasPos, canvasSize, originScreen);
+                DrawImplicitFunction(drawList, exp.id, exp.evaluator, color, canvasPos, canvasSize, originScreen);
             } else {
                 DrawExplicitFunction(drawList, exp.evaluator, color, canvasPos, canvasSize, originScreen);
             }
+        }
+
+        // Garbage collect stale implicit caches for deleted expressions
+        for (auto it = m_ImplicitCaches.begin(); it != m_ImplicitCaches.end(); ) {
+            int id = it->first;
+            bool found = false;
+            for (const auto& exp : expressions) {
+                if (exp.id == id) { found = true; break; }
+            }
+            if (!found) it = m_ImplicitCaches.erase(it);
+            else ++it;
         }
 
         // 2. Draw 2D Points, Custom Labels, and Connecting Lines (Desmos Style)
@@ -439,16 +451,16 @@ namespace GraphLab::UI {
      *  2. ContourSampler: Origin-anchored grid + 4-iteration bisection refinement + EdgeKey topology.
      *  3. GraphRenderer: World-coordinate render cache + ImGui AddPolyline with smooth miter joins.
      */
-    void GraphCanvas::DrawImplicitFunction(ImDrawList* drawList, const Math::Evaluator& evaluator, ImU32 color, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen) {
+    void GraphCanvas::DrawImplicitFunction(ImDrawList* drawList, int exprId, const Math::Evaluator& evaluator, ImU32 color, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen) {
 
-        const std::string& exprStr = evaluator.GetExpression();
-        auto& cache = m_ImplicitCaches[exprStr];
+        auto& cache = m_ImplicitCaches[exprId];
 
         float now = static_cast<float>(ImGui::GetTime());
         bool isCanvasDragging = m_IsDragging || (now - m_LastInteractionTime < 0.10f);
         bool isSliderActive = ImGui::IsAnyItemActive();
 
         bool paramsChanged = (cache.sampledParams != evaluator.GetParams());
+        bool exprStrChanged = (cache.sampledExprStr != evaluator.GetExpression());
 
         constexpr float margin = 150.0f; // 150px padded margin to pre-sample offscreen/sidebar geometry
 
@@ -459,8 +471,9 @@ namespace GraphLab::UI {
         float desiredCellSize = (isSliderActive || isCanvasDragging) ? 4.0f : 2.0f;
         bool needsQualityUpgrade = (!isSliderActive && !isCanvasDragging && cache.sampledCellSize > desiredCellSize);
 
-        // Rebuild if cache invalid, parameters changed, quality upgrade needed, zoom changed, pan exceeded margin, or window resized
+        // Rebuild if cache invalid, expression string changed, parameters changed, quality upgrade needed, zoom changed, pan exceeded margin, or window resized
         bool needsRebuild = !cache.valid
+                         || exprStrChanged
                          || paramsChanged
                          || needsQualityUpgrade
                          || (!isCanvasDragging && cache.sampledZoom != m_Zoom)
@@ -827,6 +840,7 @@ namespace GraphLab::UI {
                 cache.sampledCellSize = cellSize;
                 cache.sampledCanvasSize = canvasSize;
                 cache.sampledPanOffset = m_PanOffset;
+                cache.sampledExprStr = evaluator.GetExpression();
                 cache.sampledParams = evaluator.GetParams();
                 cache.valid = true;
             }
@@ -860,7 +874,9 @@ namespace GraphLab::UI {
         const std::string& title,
         double xVal,
         double yVal,
-        ImU32 accentColor
+        ImU32 accentColor,
+        ImVec2 canvasPos,
+        ImVec2 canvasSize
     ) {
         char buf[128];
         if (title.empty()) {
@@ -874,6 +890,15 @@ namespace GraphLab::UI {
         ImVec2 boxSize = ImVec2(textSize.x + padding * 2.0f, textSize.y + padding * 2.0f);
 
         ImVec2 boxMin = ImVec2(screenPos.x - boxSize.x * 0.5f, screenPos.y - boxSize.y - 12.0f);
+
+        // If tooltip would bleed above top of canvas, flip it to display below screenPos
+        if (boxMin.y < canvasPos.y + 10.0f) {
+            boxMin.y = screenPos.y + 12.0f;
+        }
+
+        // Clamp horizontally inside canvas bounds
+        boxMin.x = std::clamp(boxMin.x, canvasPos.x + 10.0f, canvasPos.x + canvasSize.x - boxSize.x - 10.0f);
+
         ImVec2 boxMax = ImVec2(boxMin.x + boxSize.x, boxMin.y + boxSize.y);
 
         // Draw sleek dark background with rounded corners and border accent
@@ -983,7 +1008,7 @@ namespace GraphLab::UI {
                 drawList->AddCircle(screenPt, rOuter, accentCol, 0, 1.5f);
 
                 if (isHovered) {
-                    RenderDesmosTooltip(drawList, screenPt, kp.label, kp.x, kp.y, accentCol);
+                    RenderDesmosTooltip(drawList, screenPt, kp.label, kp.x, kp.y, accentCol, canvasPos, canvasSize);
                 }
             }
         }
@@ -1025,7 +1050,7 @@ namespace GraphLab::UI {
                 drawList->AddCircleFilled(bestTraceScreen, 4.0f, bestColor);
                 drawList->AddCircle(bestTraceScreen, 6.0f, bestColor, 0, 2.0f);
 
-                RenderDesmosTooltip(drawList, bestTraceScreen, bestExprLabel, bestWorldX, bestWorldY, bestColor);
+                RenderDesmosTooltip(drawList, bestTraceScreen, bestExprLabel, bestWorldX, bestWorldY, bestColor, canvasPos, canvasSize);
             }
         }
 
@@ -1034,7 +1059,7 @@ namespace GraphLab::UI {
             ImVec2 screenPt = WorldToScreen(ImVec2(static_cast<float>(m_PinnedPoint->x), static_cast<float>(m_PinnedPoint->y)), originScreen);
             drawList->AddCircleFilled(screenPt, 8.0f, IM_COL32(255, 255, 255, 255));
             drawList->AddCircle(screenPt, 8.0f, IM_COL32(0, 120, 255, 255), 0, 2.5f);
-            RenderDesmosTooltip(drawList, screenPt, m_PinnedPoint->label + " (Pinned)", m_PinnedPoint->x, m_PinnedPoint->y, IM_COL32(0, 120, 255, 255));
+            RenderDesmosTooltip(drawList, screenPt, m_PinnedPoint->label + " (Pinned)", m_PinnedPoint->x, m_PinnedPoint->y, IM_COL32(0, 120, 255, 255), canvasPos, canvasSize);
         }
     }
 }

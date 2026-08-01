@@ -21,6 +21,7 @@ namespace GraphLab::UI {
         float sampledCellSize = 0.0f;
         ImVec2 sampledCanvasSize = ImVec2(0.0f, 0.0f);
         ImVec2 sampledPanOffset = ImVec2(0.0f, 0.0f);
+        std::string sampledExprStr;
         std::unordered_map<std::string, double> sampledParams;
         bool valid = false;
     };
@@ -66,10 +67,10 @@ namespace GraphLab::UI {
 
         void DrawExpressions(ImDrawList* drawList, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen);
         void DrawExplicitFunction(ImDrawList* drawList, const Math::Evaluator& evaluator, ImU32 color, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen);
-        void DrawImplicitFunction(ImDrawList* drawList, const Math::Evaluator& evaluator, ImU32 color, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen);
+        void DrawImplicitFunction(ImDrawList* drawList, int exprId, const Math::Evaluator& evaluator, ImU32 color, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen);
 
         void UpdateAndDrawKeyPointsAndTrace(ImDrawList* drawList, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen);
-        void RenderDesmosTooltip(ImDrawList* drawList, ImVec2 screenPos, const std::string& title, double xVal, double yVal, ImU32 accentColor);
+        void RenderDesmosTooltip(ImDrawList* drawList, ImVec2 screenPos, const std::string& title, double xVal, double yVal, ImU32 accentColor, ImVec2 canvasPos, ImVec2 canvasSize);
 
     private:
         ImVec2 m_PanOffset = ImVec2(0.0f, 0.0f);        // Offset from center to origin
@@ -88,7 +89,7 @@ namespace GraphLab::UI {
         std::optional<Math::KeyPoint> m_PinnedPoint;
 
         // Render Cache & Interaction Timers
-        std::unordered_map<std::string, ImplicitRenderCache> m_ImplicitCaches;
+        std::unordered_map<int, ImplicitRenderCache> m_ImplicitCaches;
         float m_LastInteractionTime = -1000.0f;
     };
 }
