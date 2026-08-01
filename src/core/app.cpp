@@ -75,6 +75,11 @@ namespace GraphLab {
         if (window_w <= 0 || window_h <= 0 || display_w <= 0 || display_h <= 0)
             return;
 
+        bool isExporting = !m_PendingExportImagePath.empty();
+        if (isExporting) {
+            m_GraphCanvas.SetHideOverlayUI(true);
+        }
+
         // Synchronize ImGui viewport display size with actual window dimensions
         ImGuiIO& io = ImGui::GetIO();
         io.DisplaySize = ImVec2((float)window_w, (float)window_h);
@@ -96,6 +101,13 @@ namespace GraphLab {
         glClear(GL_COLOR_BUFFER_BIT);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        if (isExporting) {
+            m_MainMenuBar.PerformExportImage(m_PendingExportImagePath);
+            m_PendingExportImagePath.clear();
+            m_GraphCanvas.SetHideOverlayUI(false);
+        }
+
         glfwSwapBuffers(m_Window);
     }
 

@@ -37,6 +37,8 @@ namespace GraphLab {
         void Close() { m_Running = false; }
         void RenderFrame();
 
+        void RequestExportImage(const std::string& filepath) { m_PendingExportImagePath = filepath; }
+
         static App& Get() { return *s_Instance; }
         static bool HasInstance() { return s_Instance != nullptr; }
 
@@ -49,6 +51,8 @@ namespace GraphLab {
         UI::GraphCanvas& GetGraphCanvas() { return m_GraphCanvas; }
         const UI::GraphCanvas& GetGraphCanvas() const { return m_GraphCanvas; }
 
+        UI::MainMenuBar& GetMainMenuBar() { return m_MainMenuBar; }
+
     private:
         bool Init();
         void SetAppIcon();
@@ -60,6 +64,7 @@ namespace GraphLab {
         AppSpec m_Spec;
         GLFWwindow* m_Window = nullptr;
         bool m_Running = false;
+        std::string m_PendingExportImagePath;
 
         UI::MainMenuBar m_MainMenuBar;
         UI::SidebarPanel m_SidebarPanel;

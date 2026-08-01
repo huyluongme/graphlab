@@ -16,7 +16,9 @@ SOURCES = src/main.cpp \
           src/ui/graph_canvas.cpp \
           src/math/evaluator.cpp \
           src/math/expression.cpp \
-          src/math/analysis.cpp
+          src/math/analysis.cpp \
+          src/utils/file_dialog.cpp \
+          src/utils/project_serializer.cpp
 
 SOURCES += $(IMGUI_DIR)/imgui.cpp \
            $(IMGUI_DIR)/imgui_demo.cpp \
@@ -52,7 +54,7 @@ endif
 
 ifeq ($(IS_WINDOWS), 1)
     ECHO_MESSAGE = Windows (MinGW/MSYS2)
-    LIBS = $(GLFW_DIR)/win64/libglfw3.a -lopengl32 -lgdi32 -limm32
+    LIBS = $(GLFW_DIR)/win64/libglfw3.a -lopengl32 -lgdi32 -limm32 -lcomdlg32
     ifneq ($(DEBUG), 1)
         LIBS += -mwindows
     endif
@@ -84,6 +86,9 @@ $(OBJ_DIR)/%.o: src/ui/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(OBJ_DIR)/%.o: src/math/%.cpp | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(OBJ_DIR)/%.o: src/utils/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(OBJ_DIR)/%.o: $(IMGUI_DIR)/%.cpp | $(OBJ_DIR)

@@ -60,24 +60,26 @@ namespace GraphLab::UI {
         // Update and render interactive key points and hover trace overlay
         UpdateAndDrawKeyPointsAndTrace(drawList, canvasPos, canvasSize, originScreen);
 
-        // Render UI controls
-        ImGui::SetCursorPos(ImVec2(15.0f, 15.0f));
-        ImGui::BeginGroup();
+        // Render UI controls if not exporting clean image
+        if (!m_HideOverlayUI) {
+            ImGui::SetCursorPos(ImVec2(15.0f, 15.0f));
+            ImGui::BeginGroup();
 
-        if (ImGui::Button("Reset View (1:1)"))
-            ResetView();
+            if (ImGui::Button("Reset View (1:1)"))
+                ResetView();
 
-        ImGui::SameLine();
-        ImGui::Checkbox("Key Points", &m_EnableKeyPoints);
-        ImGui::SameLine();
-        ImGui::Checkbox("Trace Hover", &m_EnableTraceMode);
+            ImGui::SameLine();
+            ImGui::Checkbox("Key Points", &m_EnableKeyPoints);
+            ImGui::SameLine();
+            ImGui::Checkbox("Trace Hover", &m_EnableTraceMode);
 
-        ImGui::TextDisabled("FPS: %.1f", io.Framerate);
-        ImGui::TextDisabled("Frame: %.2f ms", 1000.0f / std::max(io.Framerate, 1.0f));
-        ImGui::TextDisabled("Zoom: %.1f", m_Zoom);
-        ImGui::TextDisabled("Pan: (%.2f, %.2f)", m_PanOffset.x, m_PanOffset.y);
+            ImGui::TextDisabled("FPS: %.1f", io.Framerate);
+            ImGui::TextDisabled("Frame: %.2f ms", 1000.0f / std::max(io.Framerate, 1.0f));
+            ImGui::TextDisabled("Zoom: %.1f", m_Zoom);
+            ImGui::TextDisabled("Pan: (%.2f, %.2f)", m_PanOffset.x, m_PanOffset.y);
 
-        ImGui::EndGroup();
+            ImGui::EndGroup();
+        }
         ImGui::End();
     }
 
@@ -428,20 +430,35 @@ namespace GraphLab::UI {
         auto& cache = m_ImplicitCaches[exprStr];
 
         float now = static_cast<float>(ImGui::GetTime());
-        bool interacting = m_IsDragging || (now - m_LastInteractionTime < 0.15f);
+        bool interacting = m_IsDragging || (now - m_LastInteractionTime < 0.10f);
 
+        constexpr float margin = 150.0f; // 150px padded margin to pre-sample offscreen/sidebar geometry
+
+        float panDeltaX = std::abs(m_PanOffset.x - cache.sampledPanOffset.x);
+        float panDeltaY = std::abs(m_PanOffset.y - cache.sampledPanOffset.y);
+        bool panExceededMargin = panDeltaX > (margin * 0.75f) || panDeltaY > (margin * 0.75f);
+
+        // Suppress CPU-heavy grid rebuilds while actively dragging to guarantee 144+ FPS
         bool needsRebuild = !cache.valid
-                         || (!interacting && (cache.sampledZoom != m_Zoom || cache.sampledCanvasSize.x != canvasSize.x || cache.sampledCanvasSize.y != canvasSize.y));
+                         || (!interacting && cache.sampledZoom != m_Zoom)
+                         || (!interacting && panExceededMargin)
+                         || cache.sampledCanvasSize.x != canvasSize.x
+                         || cache.sampledCanvasSize.y != canvasSize.y;
 
         if (needsRebuild) {
             constexpr float cellSize = 2.0f;
 
-            // 1. Anchor Grid to world coordinate origin (originScreen)
-            float gridStartX = originScreen.x + std::floor((canvasPos.x - originScreen.x) / cellSize) * cellSize;
-            float gridStartY = originScreen.y + std::floor((canvasPos.y - originScreen.y) / cellSize) * cellSize;
+            float minX = canvasPos.x - margin;
+            float maxX = canvasPos.x + canvasSize.x + margin;
+            float minY = canvasPos.y - margin;
+            float maxY = canvasPos.y + canvasSize.y + margin;
 
-            int cols = static_cast<int>(std::ceil((canvasPos.x + canvasSize.x - gridStartX) / cellSize)) + 1;
-            int rows = static_cast<int>(std::ceil((canvasPos.y + canvasSize.y - gridStartY) / cellSize)) + 1;
+            // 1. Anchor Grid to world coordinate origin (originScreen)
+            float gridStartX = originScreen.x + std::floor((minX - originScreen.x) / cellSize) * cellSize;
+            float gridStartY = originScreen.y + std::floor((minY - originScreen.y) / cellSize) * cellSize;
+
+            int cols = static_cast<int>(std::ceil((maxX - gridStartX) / cellSize)) + 1;
+            int rows = static_cast<int>(std::ceil((maxY - gridStartY) / cellSize)) + 1;
 
             if (cols >= 2 && rows >= 2) {
                 // 2. Evaluate grid vertices EXACTLY ONCE
@@ -698,6 +715,7 @@ namespace GraphLab::UI {
 
                 cache.sampledZoom = m_Zoom;
                 cache.sampledCanvasSize = canvasSize;
+                cache.sampledPanOffset = m_PanOffset;
                 cache.valid = true;
             }
         }

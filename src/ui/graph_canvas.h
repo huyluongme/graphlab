@@ -18,6 +18,7 @@ namespace GraphLab::UI {
         std::vector<CachedPolyline> polylines;
         float sampledZoom = 0.0f;
         ImVec2 sampledCanvasSize = ImVec2(0.0f, 0.0f);
+        ImVec2 sampledPanOffset = ImVec2(0.0f, 0.0f);
         bool valid = false;
     };
 
@@ -36,6 +37,15 @@ namespace GraphLab::UI {
 
         bool IsTraceModeEnabled() const { return m_EnableTraceMode; }
         void SetTraceModeEnabled(bool enabled) { m_EnableTraceMode = enabled; }
+
+        float GetZoom() const { return m_Zoom; }
+        void SetZoom(float zoom) { m_Zoom = zoom; }
+
+        ImVec2 GetPanOffset() const { return m_PanOffset; }
+        void SetPanOffset(ImVec2 pan) { m_PanOffset = pan; }
+
+        bool IsHideOverlayUI() const { return m_HideOverlayUI; }
+        void SetHideOverlayUI(bool hide) { m_HideOverlayUI = hide; }
 
     private:
         void ResetView();
@@ -61,6 +71,7 @@ namespace GraphLab::UI {
         // Key Points & Value Inspector / Hover Trace State
         bool m_EnableKeyPoints = true;
         bool m_EnableTraceMode = true;
+        bool m_HideOverlayUI = false;                   // Hide overlay buttons/text during clean image export
         std::vector<Math::KeyPoint> m_CachedKeyPoints;
         std::optional<Math::KeyPoint> m_PinnedPoint;
 
