@@ -14,6 +14,7 @@ namespace GraphLab::UI {
         float maxVal = 10.0f;
         bool isPlaying = false;
         float animSpeed = 2.0f;
+        int animDirection = 1; // 1 = increasing (+), -1 = decreasing (-)
     };
 
     class SidebarPanel {
@@ -38,6 +39,7 @@ namespace GraphLab::UI {
         std::vector<Math::Expression> m_Expressions;
         std::unordered_map<std::string, ParamState> m_GlobalParams;
         int m_NextId = 1;
-        float m_PanelWidth = 340.0f;
+        float m_PanelWidth = 320.0f;
     };
+
 }

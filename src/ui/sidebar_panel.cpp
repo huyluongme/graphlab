@@ -371,13 +371,20 @@ namespace GraphLab::UI {
             }
         }
 
-        // 3. Update parameter animations
+        // 3. Update parameter Ping-Pong animations (oscillate smoothly between minVal and maxVal)
         float dt = ImGui::GetIO().DeltaTime;
         for (auto& [pName, state] : m_GlobalParams) {
             if (state.isPlaying) {
-                state.value += static_cast<double>(dt * state.animSpeed);
-                if (state.value > state.maxVal) {
+                if (state.animDirection == 0) state.animDirection = 1;
+
+                state.value += static_cast<double>(dt * state.animSpeed * state.animDirection);
+
+                if (state.value >= state.maxVal) {
+                    state.value = state.maxVal;
+                    state.animDirection = -1; // Reverse direction to decreasing
+                } else if (state.value <= state.minVal) {
                     state.value = state.minVal;
+                    state.animDirection = 1; // Reverse direction to increasing
                 }
             }
         }

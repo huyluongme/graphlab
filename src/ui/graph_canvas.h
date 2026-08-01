@@ -19,6 +19,7 @@ namespace GraphLab::UI {
         float sampledZoom = 0.0f;
         ImVec2 sampledCanvasSize = ImVec2(0.0f, 0.0f);
         ImVec2 sampledPanOffset = ImVec2(0.0f, 0.0f);
+        std::unordered_map<std::string, double> sampledParams;
         bool valid = false;
     };
 
