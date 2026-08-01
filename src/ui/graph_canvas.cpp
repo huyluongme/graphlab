@@ -57,12 +57,20 @@ namespace GraphLab::UI {
         // Render mathematical expressions dynamically from Sidebar
         DrawExpressions(drawList, canvasPos, canvasSize, originScreen);
 
+        // Update and render interactive key points and hover trace overlay
+        UpdateAndDrawKeyPointsAndTrace(drawList, canvasPos, canvasSize, originScreen);
+
         // Render UI controls
         ImGui::SetCursorPos(ImVec2(15.0f, 15.0f));
         ImGui::BeginGroup();
 
         if (ImGui::Button("Reset View (1:1)"))
             ResetView();
+
+        ImGui::SameLine();
+        ImGui::Checkbox("Key Points", &m_EnableKeyPoints);
+        ImGui::SameLine();
+        ImGui::Checkbox("Trace Hover", &m_EnableTraceMode);
 
         ImGui::TextDisabled("FPS: %.1f", io.Framerate);
         ImGui::TextDisabled("Frame: %.2f ms", 1000.0f / std::max(io.Framerate, 1.0f));
@@ -643,4 +651,168 @@ namespace GraphLab::UI {
             );
         }
     }
+
+    void GraphCanvas::RenderDesmosTooltip(
+        ImDrawList* drawList,
+        ImVec2 screenPos,
+        const std::string& title,
+        double xVal,
+        double yVal,
+        ImU32 accentColor
+    ) {
+        char buf[128];
+        if (title.empty()) {
+            std::snprintf(buf, sizeof(buf), "(%.3f, %.3f)", xVal, yVal);
+        } else {
+            std::snprintf(buf, sizeof(buf), "%s\n(%.3f, %.3f)", title.c_str(), xVal, yVal);
+        }
+
+        ImVec2 textSize = ImGui::CalcTextSize(buf);
+        float padding = 8.0f;
+        ImVec2 boxSize = ImVec2(textSize.x + padding * 2.0f, textSize.y + padding * 2.0f);
+
+        ImVec2 boxMin = ImVec2(screenPos.x - boxSize.x * 0.5f, screenPos.y - boxSize.y - 12.0f);
+        ImVec2 boxMax = ImVec2(boxMin.x + boxSize.x, boxMin.y + boxSize.y);
+
+        // Draw sleek dark background with rounded corners and border accent
+        drawList->AddRectFilled(boxMin, boxMax, IM_COL32(20, 24, 32, 230), 6.0f);
+        drawList->AddRect(boxMin, boxMax, accentColor, 6.0f, 0, 1.5f);
+
+        ImVec2 textPos = ImVec2(boxMin.x + padding, boxMin.y + padding);
+        drawList->AddText(textPos, IM_COL32(240, 245, 255, 255), buf);
+    }
+
+    void GraphCanvas::UpdateAndDrawKeyPointsAndTrace(
+        ImDrawList* drawList,
+        ImVec2 canvasPos,
+        ImVec2 canvasSize,
+        ImVec2 originScreen
+    ) {
+        const auto& expressions = App::Get().GetSidebarPanel().GetExpressions();
+        if (expressions.empty()) return;
+
+        ImVec2 worldTL = ScreenToWorld(canvasPos, originScreen);
+        ImVec2 worldBR = ScreenToWorld(ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), originScreen);
+        double xMin = std::min(static_cast<double>(worldTL.x), static_cast<double>(worldBR.x));
+        double xMax = std::max(static_cast<double>(worldTL.x), static_cast<double>(worldBR.x));
+
+        // 1. Calculate Key Points inside visible range
+        if (m_EnableKeyPoints) {
+            m_CachedKeyPoints = Math::Analysis::FindKeyPoints(expressions, xMin, xMax, 250);
+        }
+
+        ImGuiIO& io = ImGui::GetIO();
+        ImVec2 mousePos = io.MousePos;
+        bool isCanvasHovered = (
+            mousePos.x >= canvasPos.x && mousePos.x <= canvasPos.x + canvasSize.x &&
+            mousePos.y >= canvasPos.y && mousePos.y <= canvasPos.y + canvasSize.y
+        );
+
+        std::optional<Math::KeyPoint> hoveredKeyPoint;
+        float minKeyPointDist = 12.0f;
+
+        if (m_EnableKeyPoints && isCanvasHovered) {
+            for (const auto& kp : m_CachedKeyPoints) {
+                ImVec2 screenPt = WorldToScreen(ImVec2(static_cast<float>(kp.x), static_cast<float>(kp.y)), originScreen);
+                float dx = screenPt.x - mousePos.x;
+                float dy = screenPt.y - mousePos.y;
+                float dist = std::sqrt(dx * dx + dy * dy);
+                if (dist < minKeyPointDist) {
+                    minKeyPointDist = dist;
+                    hoveredKeyPoint = kp;
+                }
+            }
+        }
+
+        // Handle left click to pin/unpin point inspection
+        if (isCanvasHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !m_IsDragging) {
+            if (hoveredKeyPoint.has_value()) {
+                m_PinnedPoint = hoveredKeyPoint;
+            } else {
+                m_PinnedPoint = std::nullopt;
+            }
+        }
+
+        // 2. Draw Key Points markers
+        if (m_EnableKeyPoints) {
+            for (const auto& kp : m_CachedKeyPoints) {
+                ImVec2 screenPt = WorldToScreen(ImVec2(static_cast<float>(kp.x), static_cast<float>(kp.y)), originScreen);
+                if (screenPt.x < canvasPos.x || screenPt.x > canvasPos.x + canvasSize.x ||
+                    screenPt.y < canvasPos.y || screenPt.y > canvasPos.y + canvasSize.y) {
+                    continue;
+                }
+
+                bool isHovered = hoveredKeyPoint.has_value() &&
+                                 std::abs(hoveredKeyPoint->x - kp.x) < 1e-4 &&
+                                 std::abs(hoveredKeyPoint->y - kp.y) < 1e-4;
+
+                ImU32 accentCol = IM_COL32(180, 180, 180, 220);
+                if (kp.type == Math::KeyPointType::Root) accentCol = IM_COL32(220, 220, 220, 240);
+                else if (kp.type == Math::KeyPointType::YIntercept) accentCol = IM_COL32(100, 200, 255, 240);
+                else if (kp.type == Math::KeyPointType::LocalMax || kp.type == Math::KeyPointType::LocalMin) accentCol = IM_COL32(255, 200, 80, 240);
+                else if (kp.type == Math::KeyPointType::Intersection) accentCol = IM_COL32(255, 100, 200, 240);
+
+                float rOuter = isHovered ? 7.0f : 5.0f;
+                float rInner = isHovered ? 4.0f : 3.0f;
+
+                drawList->AddCircleFilled(screenPt, rOuter, IM_COL32(20, 20, 25, 200));
+                drawList->AddCircleFilled(screenPt, rInner, accentCol);
+                drawList->AddCircle(screenPt, rOuter, accentCol, 0, 1.5f);
+
+                if (isHovered) {
+                    RenderDesmosTooltip(drawList, screenPt, kp.label, kp.x, kp.y, accentCol);
+                }
+            }
+        }
+
+        // 3. Hover Trace Mode (if no keypoint is hovered)
+        if (m_EnableTraceMode && isCanvasHovered && !hoveredKeyPoint.has_value() && !m_IsDragging) {
+            ImVec2 mouseWorld = ScreenToWorld(mousePos, originScreen);
+            double bestDist = 25.0; // pixel distance threshold
+            ImVec2 bestTraceScreen;
+            double bestWorldX = 0.0, bestWorldY = 0.0;
+            std::string bestExprLabel;
+            ImU32 bestColor = IM_COL32(255, 255, 255, 255);
+            bool foundTrace = false;
+
+            for (const auto& expr : expressions) {
+                if (!expr.visible || !expr.evaluator.IsValid() || expr.evaluator.IsImplicit()) continue;
+
+                double yVal = expr.evaluator.Evaluate(mouseWorld.x);
+                if (std::isfinite(yVal)) {
+                    ImVec2 screenPt = WorldToScreen(ImVec2(mouseWorld.x, static_cast<float>(yVal)), originScreen);
+                    float dx = screenPt.x - mousePos.x;
+                    float dy = screenPt.y - mousePos.y;
+                    double dist = std::sqrt(dx * dx + dy * dy);
+
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestTraceScreen = screenPt;
+                        bestWorldX = mouseWorld.x;
+                        bestWorldY = yVal;
+                        bestExprLabel = expr.name;
+                        bestColor = ImGui::ColorConvertFloat4ToU32(expr.color);
+                        foundTrace = true;
+                    }
+                }
+            }
+
+            if (foundTrace) {
+                drawList->AddCircleFilled(bestTraceScreen, 6.0f, IM_COL32(20, 20, 25, 200));
+                drawList->AddCircleFilled(bestTraceScreen, 4.0f, bestColor);
+                drawList->AddCircle(bestTraceScreen, 6.0f, bestColor, 0, 2.0f);
+
+                RenderDesmosTooltip(drawList, bestTraceScreen, bestExprLabel, bestWorldX, bestWorldY, bestColor);
+            }
+        }
+
+        // 4. Render Pinned Point if active
+        if (m_PinnedPoint.has_value()) {
+            ImVec2 screenPt = WorldToScreen(ImVec2(static_cast<float>(m_PinnedPoint->x), static_cast<float>(m_PinnedPoint->y)), originScreen);
+            drawList->AddCircleFilled(screenPt, 8.0f, IM_COL32(255, 255, 255, 255));
+            drawList->AddCircle(screenPt, 8.0f, IM_COL32(0, 120, 255, 255), 0, 2.5f);
+            RenderDesmosTooltip(drawList, screenPt, m_PinnedPoint->label + " (Pinned)", m_PinnedPoint->x, m_PinnedPoint->y, IM_COL32(0, 120, 255, 255));
+        }
+    }
 }
+
