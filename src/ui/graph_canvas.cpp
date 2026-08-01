@@ -51,6 +51,9 @@ namespace GraphLab::UI {
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
+        // Push Canvas Clip Rect to prevent overlays from bleeding outside canvas window
+        drawList->PushClipRect(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), true);
+
         // Draw the grid and axes
         DrawGridAndAxes(drawList, canvasPos, canvasSize, originScreen);
 
@@ -59,6 +62,8 @@ namespace GraphLab::UI {
 
         // Update and render interactive key points and hover trace overlay
         UpdateAndDrawKeyPointsAndTrace(drawList, canvasPos, canvasSize, originScreen);
+
+        drawList->PopClipRect();
 
         // Render UI controls if not exporting clean image
         if (!m_HideOverlayUI) {
@@ -86,6 +91,7 @@ namespace GraphLab::UI {
     void GraphCanvas::ResetView() {
         m_PanOffset = ImVec2(0.0f, 0.0f);
         m_Zoom = 50.0f;
+        m_KeyPointCache.valid = false;
     }
 
     /**
@@ -123,44 +129,53 @@ namespace GraphLab::UI {
         ImGuiIO& io = ImGui::GetIO();
         ImVec2 mousePos = io.MousePos;
 
-        // Check if the mouse is hovering over the canvas
+        // Check if the mouse is hovering over the canvas (excluding overlay controls)
         bool isHovered = (
             mousePos.x >= canvasPos.x && mousePos.x <= canvasPos.x + canvasSize.x &&
             mousePos.y >= canvasPos.y && mousePos.y <= canvasPos.y + canvasSize.y
+        ) && !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive();
+
+        ImVec2 originScreen(
+            canvasPos.x + canvasSize.x * 0.5f + m_PanOffset.x,
+            canvasPos.y + canvasSize.y * 0.5f + m_PanOffset.y
         );
 
-        // Handle mouse wheel for zooming
+        // Cursor-Centered Zooming (Desmos style)
         if (isHovered && io.MouseWheel != 0.0f) {
             float zoomFactor = (io.MouseWheel > 0.0f) ? 1.15f : (1.0f / 1.15f);
+
+            ImVec2 mouseWorld = ScreenToWorld(mousePos, originScreen);
             m_Zoom = std::clamp(m_Zoom * zoomFactor, 5.0f, 1000.0f);
+
+            // Re-anchor pan offset so mouseWorld stays strictly under cursor after zoom
+            m_PanOffset.x = mousePos.x - (canvasPos.x + canvasSize.x * 0.5f) - mouseWorld.x * m_Zoom;
+            m_PanOffset.y = mousePos.y - (canvasPos.y + canvasSize.y * 0.5f) + mouseWorld.y * m_Zoom;
+
             m_LastInteractionTime = static_cast<float>(ImGui::GetTime());
         }
 
-        // Handle mouse click for panning
-        if (isHovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Left)
-            || (ImGui::IsMouseClicked(ImGuiMouseButton_Middle) && !ImGui::IsAnyItemActive()))) {
-            m_IsDragging = true;
+        // Mouse click & drag threshold (5px threshold so pin-clicking works reliably)
+        if (isHovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Middle))) {
+            m_PotentialDrag = true;
             m_DragStartMouse = mousePos;
             m_DragStartPan = m_PanOffset;
             m_LastInteractionTime = static_cast<float>(ImGui::GetTime());
         }
 
-        // Handle mouse release for panning
-        if (m_IsDragging) {
-            m_LastInteractionTime = static_cast<float>(ImGui::GetTime());
-            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)
-                || ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
-                ImVec2 delta = ImVec2(
-                    mousePos.x - m_DragStartMouse.x,
-                    mousePos.y - m_DragStartMouse.y
-                );
-                m_PanOffset = ImVec2(
-                    m_DragStartPan.x + delta.x,
-                    m_DragStartPan.y + delta.y
-                );
-            }
-            else
+        if (m_PotentialDrag) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
+                ImVec2 delta(mousePos.x - m_DragStartMouse.x, mousePos.y - m_DragStartMouse.y);
+                if (delta.x * delta.x + delta.y * delta.y > 25.0f) { // 5px threshold
+                    m_IsDragging = true;
+                }
+                if (m_IsDragging) {
+                    m_PanOffset = ImVec2(m_DragStartPan.x + delta.x, m_DragStartPan.y + delta.y);
+                    m_LastInteractionTime = static_cast<float>(ImGui::GetTime());
+                }
+            } else {
+                m_PotentialDrag = false;
                 m_IsDragging = false;
+            }
         }
     }
 
@@ -441,17 +456,20 @@ namespace GraphLab::UI {
         float panDeltaY = std::abs(m_PanOffset.y - cache.sampledPanOffset.y);
         bool panExceededMargin = panDeltaX > (margin * 0.75f) || panDeltaY > (margin * 0.75f);
 
-        // Rebuild if cache invalid, parameters changed, zoom changed, pan exceeded margin, or window resized
+        float desiredCellSize = (isSliderActive || isCanvasDragging) ? 4.0f : 2.0f;
+        bool needsQualityUpgrade = (!isSliderActive && !isCanvasDragging && cache.sampledCellSize > desiredCellSize);
+
+        // Rebuild if cache invalid, parameters changed, quality upgrade needed, zoom changed, pan exceeded margin, or window resized
         bool needsRebuild = !cache.valid
                          || paramsChanged
+                         || needsQualityUpgrade
                          || (!isCanvasDragging && cache.sampledZoom != m_Zoom)
                          || (!isCanvasDragging && panExceededMargin)
                          || cache.sampledCanvasSize.x != canvasSize.x
                          || cache.sampledCanvasSize.y != canvasSize.y;
 
         if (needsRebuild) {
-            // Adaptive grid resolution: coarse 4.0px step during active parameter interaction for instant 144+ FPS, 2.0px when idle
-            float cellSize = (isSliderActive || isCanvasDragging) ? 4.0f : 2.0f;
+            float cellSize = desiredCellSize;
 
             float minX = canvasPos.x - margin;
             float maxX = canvasPos.x + canvasSize.x + margin;
@@ -494,17 +512,27 @@ namespace GraphLab::UI {
                 std::vector<uint8_t> activeBlocks(static_cast<size_t>(blockCols) * blockRows, 0);
 
                 for (int by = 0; by < blockRows; ++by) {
+                    int centerY = std::min(by * blockSize + blockSize / 2, rows - 1);
+                    float centerScreenY = gridStartY + static_cast<float>(centerY) * cellSize;
+                    double centerWorldY = (originScreen.y - centerScreenY) / m_Zoom;
+
                     for (int bx = 0; bx < blockCols; ++bx) {
+                        int centerX = std::min(bx * blockSize + blockSize / 2, cols - 1);
+                        float centerScreenX = gridStartX + static_cast<float>(centerX) * cellSize;
+                        double centerWorldX = (centerScreenX - originScreen.x) / m_Zoom;
+
                         double v0 = CoarseValueAt(bx, by);
                         double v1 = CoarseValueAt(bx + 1, by);
                         double v2 = CoarseValueAt(bx + 1, by + 1);
                         double v3 = CoarseValueAt(bx, by + 1);
+                        double vc = evaluator.Evaluate(centerWorldX, centerWorldY);
 
                         bool signChange = (std::signbit(v0) != std::signbit(v1)) ||
                                           (std::signbit(v0) != std::signbit(v2)) ||
-                                          (std::signbit(v0) != std::signbit(v3));
+                                          (std::signbit(v0) != std::signbit(v3)) ||
+                                          (std::isfinite(vc) && std::signbit(v0) != std::signbit(vc));
 
-                        bool nearZero = (std::abs(v0) < 2.0) || (std::abs(v1) < 2.0) || (std::abs(v2) < 2.0) || (std::abs(v3) < 2.0);
+                        bool nearZero = (std::abs(v0) < 2.0) || (std::abs(v1) < 2.0) || (std::abs(v2) < 2.0) || (std::abs(v3) < 2.0) || (std::isfinite(vc) && std::abs(vc) < 2.0);
 
                         if (signChange || nearZero) {
                             for (int dy = -1; dy <= 1; ++dy) {
@@ -796,6 +824,7 @@ namespace GraphLab::UI {
                 }
 
                 cache.sampledZoom = m_Zoom;
+                cache.sampledCellSize = cellSize;
                 cache.sampledCanvasSize = canvasSize;
                 cache.sampledPanOffset = m_PanOffset;
                 cache.sampledParams = evaluator.GetParams();
@@ -869,9 +898,30 @@ namespace GraphLab::UI {
         double xMin = std::min(static_cast<double>(worldTL.x), static_cast<double>(worldBR.x));
         double xMax = std::max(static_cast<double>(worldTL.x), static_cast<double>(worldBR.x));
 
-        // 1. Calculate Key Points inside visible range
-        if (m_EnableKeyPoints) {
+        uint64_t currentExprHash = 0;
+        for (const auto& exp : expressions) {
+            if (exp.visible && exp.evaluator.IsValid()) {
+                currentExprHash ^= std::hash<std::string>{}(exp.name) + 0x9e3779b9 + (currentExprHash << 6) + (currentExprHash >> 2);
+                currentExprHash ^= std::hash<int>{}(exp.id) + 0x9e3779b9 + (currentExprHash << 6) + (currentExprHash >> 2);
+                for (const auto& [pName, pVal] : exp.evaluator.GetParams()) {
+                    currentExprHash ^= std::hash<double>{}(pVal) + 0x9e3779b9 + (currentExprHash << 6) + (currentExprHash >> 2);
+                }
+            }
+        }
+
+        // 1. Calculate Key Points inside visible range (Debounced / Cached to avoid 11,000 evaluations per frame)
+        bool rangeChanged = std::abs(xMin - m_KeyPointCache.sampledMinX) > 0.05 ||
+                            std::abs(xMax - m_KeyPointCache.sampledMaxX) > 0.05;
+        bool exprStateChanged = (currentExprHash != m_KeyPointCache.sampledExprHash);
+
+        bool needsKeyPointRebuild = !m_KeyPointCache.valid || rangeChanged || exprStateChanged;
+
+        if (m_EnableKeyPoints && needsKeyPointRebuild && !m_IsDragging) {
             m_CachedKeyPoints = Math::Analysis::FindKeyPoints(expressions, xMin, xMax, 250);
+            m_KeyPointCache.sampledMinX = static_cast<float>(xMin);
+            m_KeyPointCache.sampledMaxX = static_cast<float>(xMax);
+            m_KeyPointCache.sampledExprHash = currentExprHash;
+            m_KeyPointCache.valid = true;
         }
 
         ImGuiIO& io = ImGui::GetIO();

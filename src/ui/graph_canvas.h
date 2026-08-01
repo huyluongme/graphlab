@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "math/evaluator.h"
 #include "math/analysis.h"
+#include <cstdint>
 #include <vector>
 #include <unordered_map>
 #include <string>
@@ -17,9 +18,17 @@ namespace GraphLab::UI {
     struct ImplicitRenderCache {
         std::vector<CachedPolyline> polylines;
         float sampledZoom = 0.0f;
+        float sampledCellSize = 0.0f;
         ImVec2 sampledCanvasSize = ImVec2(0.0f, 0.0f);
         ImVec2 sampledPanOffset = ImVec2(0.0f, 0.0f);
         std::unordered_map<std::string, double> sampledParams;
+        bool valid = false;
+    };
+
+    struct KeyPointCacheState {
+        float sampledMinX = 0.0f;
+        float sampledMaxX = 0.0f;
+        uint64_t sampledExprHash = 0;
         bool valid = false;
     };
 
@@ -66,6 +75,7 @@ namespace GraphLab::UI {
         ImVec2 m_PanOffset = ImVec2(0.0f, 0.0f);        // Offset from center to origin
         float m_Zoom = 50.0f;                           // Pixels per world unit
         bool m_IsDragging = false;                      // Is the canvas being dragged?
+        bool m_PotentialDrag = false;                   // Mouse down pending drag threshold check
         ImVec2 m_DragStartMouse = ImVec2(0.0f, 0.0f);   // Mouse position at drag start
         ImVec2 m_DragStartPan = ImVec2(0.0f, 0.0f);     // Pan offset at drag start
 
@@ -74,6 +84,7 @@ namespace GraphLab::UI {
         bool m_EnableTraceMode = true;
         bool m_HideOverlayUI = false;                   // Hide overlay buttons/text during clean image export
         std::vector<Math::KeyPoint> m_CachedKeyPoints;
+        KeyPointCacheState m_KeyPointCache;
         std::optional<Math::KeyPoint> m_PinnedPoint;
 
         // Render Cache & Interaction Timers

@@ -389,10 +389,13 @@ namespace GraphLab::UI {
             }
         }
 
-        // 4. Sync parameter values to expression evaluators
+        // 4. Sync parameter values ONLY to expressions that actually use them
         for (auto& expr : m_Expressions) {
-            for (const auto& [pName, state] : m_GlobalParams) {
-                expr.evaluator.SetParam(pName, state.value);
+            for (const auto& pName : expr.evaluator.GetParamNames()) {
+                auto it = m_GlobalParams.find(pName);
+                if (it != m_GlobalParams.end()) {
+                    expr.evaluator.SetParam(pName, it->second.value);
+                }
             }
         }
     }
