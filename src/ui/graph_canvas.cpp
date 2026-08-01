@@ -229,8 +229,9 @@ namespace GraphLab::UI {
     void GraphCanvas::DrawExpressions(ImDrawList* drawList, ImVec2 canvasPos, ImVec2 canvasSize, ImVec2 originScreen) {
         const auto& expressions = App::Get().GetSidebarPanel().GetExpressions();
 
+        // 1. Draw curves (explicit and implicit functions)
         for (const auto& exp : expressions) {
-            if (!exp.visible || !exp.evaluator.IsValid())
+            if (!exp.visible || !exp.evaluator.IsValid() || exp.isPoint)
                 continue;
 
             ImU32 color = ImGui::ColorConvertFloat4ToU32(exp.color);
@@ -239,6 +240,77 @@ namespace GraphLab::UI {
                 DrawImplicitFunction(drawList, exp.evaluator, color, canvasPos, canvasSize, originScreen);
             } else {
                 DrawExplicitFunction(drawList, exp.evaluator, color, canvasPos, canvasSize, originScreen);
+            }
+        }
+
+        // 2. Draw 2D Points, Custom Labels, and Connecting Lines (Desmos Style)
+        for (const auto& exp : expressions) {
+            if (!exp.visible || !exp.isPoint || exp.pointPairs.empty()) continue;
+
+            ImU32 color = ImGui::ColorConvertFloat4ToU32(exp.color);
+            std::vector<ImVec2> itemScreenPoints;
+            itemScreenPoints.reserve(exp.pointPairs.size());
+
+            // Evaluate all points in this expression item
+            for (const auto& pair : exp.pointPairs) {
+                double wx = pair.evalX.Evaluate(0.0);
+                double wy = pair.evalY.Evaluate(0.0);
+                if (std::isfinite(wx) && std::isfinite(wy)) {
+                    itemScreenPoints.push_back(WorldToScreen(ImVec2(static_cast<float>(wx), static_cast<float>(wy)), originScreen));
+                }
+            }
+
+            // Draw connecting line / polyline between points ON THIS ITEM CARD if connectLine is true
+            if (exp.connectLine && itemScreenPoints.size() >= 2) {
+                drawList->AddPolyline(
+                    itemScreenPoints.data(),
+                    static_cast<int>(itemScreenPoints.size()),
+                    color,
+                    ImDrawFlags_None,
+                    2.0f
+                );
+            }
+
+            // Draw point dot markers and labels
+            for (size_t pIdx = 0; pIdx < itemScreenPoints.size(); ++pIdx) {
+                ImVec2 screenPt = itemScreenPoints[pIdx];
+
+                if (screenPt.x >= canvasPos.x && screenPt.x <= canvasPos.x + canvasSize.x &&
+                    screenPt.y >= canvasPos.y && screenPt.y <= canvasPos.y + canvasSize.y) {
+
+                    // Desmos-style Point Marker: Solid colored outer ring + white inner dot core
+                    drawList->AddCircleFilled(screenPt, 7.0f, color);
+                    drawList->AddCircleFilled(screenPt, 3.0f, IM_COL32(255, 255, 255, 255));
+                    drawList->AddCircle(screenPt, 7.0f, IM_COL32(20, 20, 25, 200), 0, 1.5f);
+
+                    // Render Point Label adjacent to point if showLabel is enabled
+                    if (exp.showLabel) {
+                        char labelBuf[128];
+                        if (exp.labelText[0] != '\0') {
+                            if (exp.pointPairs.size() == 1) {
+                                snprintf(labelBuf, sizeof(labelBuf), "%s", exp.labelText);
+                            } else {
+                                snprintf(labelBuf, sizeof(labelBuf), "%s%d", exp.labelText, static_cast<int>(pIdx + 1));
+                            }
+                        } else {
+                            double wx = exp.pointPairs[pIdx].evalX.Evaluate(0.0);
+                            double wy = exp.pointPairs[pIdx].evalY.Evaluate(0.0);
+                            snprintf(labelBuf, sizeof(labelBuf), "(%.3g, %.3g)", wx, wy);
+                        }
+
+                        ImVec2 txtPos = ImVec2(screenPt.x + 10.0f, screenPt.y - 14.0f);
+                        ImVec2 txtSize = ImGui::CalcTextSize(labelBuf);
+
+                        // Subtle background shadow pill for text readability
+                        drawList->AddRectFilled(
+                            ImVec2(txtPos.x - 3.0f, txtPos.y - 2.0f),
+                            ImVec2(txtPos.x + txtSize.x + 3.0f, txtPos.y + txtSize.y + 2.0f),
+                            IM_COL32(20, 24, 32, 210),
+                            4.0f
+                        );
+                        drawList->AddText(txtPos, IM_COL32(245, 245, 255, 255), labelBuf);
+                    }
+                }
             }
         }
     }

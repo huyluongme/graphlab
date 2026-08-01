@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <cstring>
 #include <cctype>
+#include <algorithm>
+#include <cmath>
 
 namespace GraphLab::UI {
 
@@ -194,10 +196,20 @@ namespace GraphLab::UI {
 
         ImGui::BeginChild("##item", ImVec2(0, 0), false);
 
+        // Synchronize parameters and animations before rendering
+        SyncParametersToExpressions();
+
         int id_to_remove = -1;
+        std::unordered_map<std::string, bool> renderedParamsThisFrame;
+
         for (size_t i = 0; i < m_Expressions.size(); ++i) {
             auto& exp = m_Expressions[i];
             ImGui::PushID(exp.id);
+
+            // Function Header Card
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
+
             ImGui::Checkbox("##visible", &exp.visible);
             ImGui::SameLine();
             
@@ -218,7 +230,121 @@ namespace GraphLab::UI {
             if (ImGui::Button("X", ImVec2(22.0f, 22.0f)))
                 id_to_remove = exp.id;
 
+            // Evaluation Result Pill (Desmos style: = -0.598...) if function evaluates to a valid constant/value
+            if (!exp.isPoint && exp.visible && exp.evaluator.IsValid() && !exp.evaluator.IsImplicit()) {
+                double evalResult = exp.evaluator.Evaluate(0.0);
+                if (std::isfinite(evalResult)) {
+                    char resBuf[64];
+                    std::snprintf(resBuf, sizeof(resBuf), "= %.6g", evalResult);
+                    ImVec2 txtSize = ImGui::CalcTextSize(resBuf);
+                    float rightOffset = std::max(10.0f, ImGui::GetWindowWidth() - txtSize.x - 35.0f);
+                    ImGui::SetCursorPosX(rightOffset);
+                    ImGui::TextDisabled("%s", resBuf);
+                }
+            }
+
+            // Render 2D Point controls (Label: B & Lines) if expression is a Point
+            if (exp.isPoint) {
+                ImGui::Dummy(ImVec2(0.0f, 2.0f));
+                ImGui::Indent(28.0f);
+
+                ImGui::Checkbox("Label:", &exp.showLabel);
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(90.0f);
+                ImGui::InputText("##labeltxt", exp.labelText, sizeof(exp.labelText));
+
+                ImGui::SameLine();
+                ImGui::Dummy(ImVec2(10.0f, 0.0f));
+                ImGui::SameLine();
+
+                ImGui::Checkbox("Lines", &exp.connectLine);
+
+                ImGui::Unindent(28.0f);
+            }
+
+            ImGui::PopStyleVar(2);
+
+            // Render Desmos-style Parameter Slider Cards right underneath this expression card
+            if (exp.visible && exp.evaluator.IsValid() && !exp.evaluator.GetParamNames().empty()) {
+                for (const auto& pName : exp.evaluator.GetParamNames()) {
+                    if (renderedParamsThisFrame[pName]) continue;
+                    renderedParamsThisFrame[pName] = true;
+
+                    auto& state = m_GlobalParams[pName];
+                    ImGui::PushID(pName.c_str());
+
+                    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+
+                    // Desmos Parameter Card Container Box
+                    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.14f, 0.16f, 0.22f, 0.7f));
+                    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.30f, 0.42f, 0.5f));
+
+                    ImGui::BeginChild(pName.c_str(), ImVec2(0.0f, 60.0f), true, ImGuiWindowFlags_NoScrollbar);
+
+                    // Row 1: Animation Play/Pause circular button + Title "a = -2.50" + Reset button
+                    const char* playIcon = state.isPlaying ? "||" : ">";
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f); // Round play button
+                    if (ImGui::Button(playIcon, ImVec2(22.0f, 22.0f))) {
+                        state.isPlaying = !state.isPlaying;
+                    }
+                    ImGui::PopStyleVar();
+                    ImGui::SameLine();
+
+                    // Display Parameter Title
+                    ImGui::TextUnformatted(pName.c_str());
+                    ImGui::SameLine();
+                    ImGui::Text("= %.2f", state.value);
+
+                    // Reset button aligned right
+                    ImGui::SameLine(ImGui::GetContentRegionAvail().x - 20.0f);
+                    if (ImGui::Button("R", ImVec2(20.0f, 20.0f))) {
+                        state.value = 1.0;
+                        state.minVal = -10.0f;
+                        state.maxVal = 10.0f;
+                        state.isPlaying = false;
+                    }
+
+                    // Row 2: Desmos Clean Slider Track flanked by Min & Max bounds
+                    ImGui::Dummy(ImVec2(0.0f, 2.0f));
+
+                    // Min Limit Input
+                    ImGui::SetNextItemWidth(36.0f);
+                    if (ImGui::InputFloat("##min", &state.minVal, 0.0f, 0.0f, "%.0f")) {
+                        if (state.minVal >= state.maxVal) state.minVal = state.maxVal - 1.0f;
+                    }
+                    ImGui::SameLine();
+
+                    // Slider Track (Full width without text overlay clutter)
+                    float valFloat = static_cast<float>(state.value);
+                    float availW = ImGui::GetContentRegionAvail().x - 44.0f;
+                    ImGui::SetNextItemWidth(std::max(60.0f, availW));
+
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 8.0f);
+                    if (ImGui::SliderFloat("##slider", &valFloat, state.minVal, state.maxVal, "")) {
+                        state.value = static_cast<double>(valFloat);
+                    }
+                    ImGui::PopStyleVar(2);
+                    ImGui::SameLine();
+
+                    // Max Limit Input
+                    ImGui::SetNextItemWidth(36.0f);
+                    if (ImGui::InputFloat("##max", &state.maxVal, 0.0f, 0.0f, "%.0f")) {
+                        if (state.maxVal <= state.minVal) state.maxVal = state.minVal + 1.0f;
+                    }
+
+                    ImGui::EndChild();
+                    ImGui::PopStyleColor(2);
+                    ImGui::PopStyleVar(2);
+
+                    ImGui::PopID();
+                }
+            }
+
             ImGui::PopID();
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
         }
 
         if (id_to_remove != -1)
@@ -226,6 +352,42 @@ namespace GraphLab::UI {
 
         ImGui::EndChild();
         ImGui::End();
+    }
+
+    void SidebarPanel::SyncParametersToExpressions() {
+        // 1. Collect all active parameters from expressions
+        std::unordered_map<std::string, bool> activeParams;
+        for (const auto& expr : m_Expressions) {
+            if (!expr.visible || !expr.evaluator.IsValid()) continue;
+            for (const auto& pName : expr.evaluator.GetParamNames()) {
+                activeParams[pName] = true;
+            }
+        }
+
+        // 2. Initialize newly discovered parameters
+        for (const auto& [pName, _] : activeParams) {
+            if (m_GlobalParams.find(pName) == m_GlobalParams.end()) {
+                m_GlobalParams[pName] = ParamState{ 1.0, -10.0f, 10.0f, false, 2.0f };
+            }
+        }
+
+        // 3. Update parameter animations
+        float dt = ImGui::GetIO().DeltaTime;
+        for (auto& [pName, state] : m_GlobalParams) {
+            if (state.isPlaying) {
+                state.value += static_cast<double>(dt * state.animSpeed);
+                if (state.value > state.maxVal) {
+                    state.value = state.minVal;
+                }
+            }
+        }
+
+        // 4. Sync parameter values to expression evaluators
+        for (auto& expr : m_Expressions) {
+            for (const auto& [pName, state] : m_GlobalParams) {
+                expr.evaluator.SetParam(pName, state.value);
+            }
+        }
     }
 
     void SidebarPanel::AddExpression(const std::string& expr) {

@@ -30,6 +30,7 @@ namespace GraphLab::Math {
         return type == Evaluator::TokenType::Number ||
                type == Evaluator::TokenType::VariableX ||
                type == Evaluator::TokenType::VariableY ||
+               type == Evaluator::TokenType::Parameter ||
                type == Evaluator::TokenType::RightParen;
     }
 
@@ -37,6 +38,7 @@ namespace GraphLab::Math {
         return type == Evaluator::TokenType::Number ||
                type == Evaluator::TokenType::VariableX ||
                type == Evaluator::TokenType::VariableY ||
+               type == Evaluator::TokenType::Parameter ||
                type == Evaluator::TokenType::Function ||
                type == Evaluator::TokenType::LeftParen;
     }
@@ -257,6 +259,13 @@ namespace GraphLab::Math {
                     push(y);
                     break;
 
+                case TokenType::Parameter: {
+                    auto it = m_Params.find(token.value);
+                    double pVal = (it != m_Params.end()) ? it->second : 1.0;
+                    push(pVal);
+                    break;
+                }
+
                 case TokenType::Operator: {
                     if (stackPtr < 1) return std::numeric_limits<double>::quiet_NaN();
                     char op = token.value[0];
@@ -310,6 +319,7 @@ namespace GraphLab::Math {
         size_t i = 0;
         size_t len = expression.length();
         m_IsImplicit = false;
+        m_ParamNames.clear();
 
         auto addToken = [&](Token newToken) {
             if (!tokens.empty() && CanEndFactor(tokens.back().type) && CanStartFactor(newToken.type)) {
@@ -393,6 +403,14 @@ namespace GraphLab::Math {
                                 addToken(Token(TokenType::Number, "e", M_E));
                                 pos += 1;
                             }
+                            else if (std::isalpha(sub[0])) {
+                                std::string paramName = sub.substr(0, 1);
+                                addToken(Token(TokenType::Parameter, paramName));
+                                if (std::find(m_ParamNames.begin(), m_ParamNames.end(), paramName) == m_ParamNames.end()) {
+                                    m_ParamNames.push_back(paramName);
+                                }
+                                pos += 1;
+                            }
                             else {
                                 m_IsValid = false;
                                 m_LastError = "Unknown identifier: '" + id + "'";
@@ -435,6 +453,7 @@ namespace GraphLab::Math {
                 case TokenType::Number:
                 case TokenType::VariableX:
                 case TokenType::VariableY:
+                case TokenType::Parameter:
                     m_RPNTokens.push_back(token);
                     break;
                 case TokenType::Operator:
@@ -497,5 +516,20 @@ namespace GraphLab::Math {
         for (const auto& t : m_RPNTokens) {
             std::cout << "Token [Type: " << (int)t.type << ", Value: '" << t.value << "']" << std::endl;
         }
+    }
+
+    void Evaluator::SetParam(const std::string& name, double value) {
+        m_Params[name] = value;
+    }
+
+    void Evaluator::SetParams(const std::unordered_map<std::string, double>& params) {
+        for (const auto& [name, val] : params) {
+            m_Params[name] = val;
+        }
+    }
+
+    double Evaluator::GetParam(const std::string& name) const {
+        auto it = m_Params.find(name);
+        return (it != m_Params.end()) ? it->second : 1.0;
     }
 }

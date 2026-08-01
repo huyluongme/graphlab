@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 namespace GraphLab::Math {
     /**
@@ -16,6 +17,7 @@ namespace GraphLab::Math {
             Number,     // 3.14, 42, -1.5
             VariableX,  // x
             VariableY,  // y
+            Parameter,  // a, b, c, k, m, etc.
             Operator,   // +, -, *, /, ^
             Function,   // sin, cos, tan, sqrt, abs, etc.
             LeftParen,  // (
@@ -42,7 +44,7 @@ namespace GraphLab::Math {
 
         /**
          * @brief Parses an infix mathematical expression string into RPN format.
-         * @param expression The expression string (e.g. "3 * sin(x) + pi")
+         * @param expression The expression string (e.g. "a * sin(b * x + c)")
          * @return True if parsing succeeded without syntax errors.
          */
         bool Parse(const std::string& expression);
@@ -61,6 +63,15 @@ namespace GraphLab::Math {
          * @return The resulting evaluated value, or NaN if undefined.
          */
         double Evaluate(double x, double y) const;
+
+        /**
+         * @brief Parameter management functions.
+         */
+        void SetParam(const std::string& name, double value);
+        void SetParams(const std::unordered_map<std::string, double>& params);
+        double GetParam(const std::string& name) const;
+        const std::vector<std::string>& GetParamNames() const { return m_ParamNames; }
+        const std::unordered_map<std::string, double>& GetParams() const { return m_Params; }
 
         /**
          * @brief Prints RPN tokens for debugging purposes.
@@ -87,6 +98,8 @@ namespace GraphLab::Math {
     private:
         std::string m_Expression;
         std::vector<Token> m_RPNTokens;
+        std::vector<std::string> m_ParamNames;
+        std::unordered_map<std::string, double> m_Params;
         bool m_IsValid = false;
         bool m_IsImplicit = false;
         bool m_IsEquation = false;
