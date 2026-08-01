@@ -27,6 +27,7 @@ namespace GraphLab::UI {
         std::vector<Math::Expression>& GetExpressions() { return m_Expressions; }
         void AddExpression(const std::string& expr = "");
         void RemoveExpression(int id);
+        void ClearAll();
         float GetPanelWidth() const { return m_PanelWidth; }
 
         const std::unordered_map<std::string, ParamState>& GetGlobalParams() const { return m_GlobalParams; }

@@ -1,4 +1,5 @@
 #include "ui/main_menu_bar.h"
+#include "version.h"
 #include "core/app.h"
 #include "utils/file_dialog.h"
 #include "utils/project_serializer.h"
@@ -55,26 +56,59 @@ namespace GraphLab::UI {
                 ImGui::EndMenu();
             }
 
-            // 2. EDIT MENU
-            if (ImGui::BeginMenu("Edit")) {
-                if (ImGui::MenuItem("Add Function", "Ctrl+A")) {
-                    App::Get().GetSidebarPanel().AddExpression();
-                }
-                if (ImGui::MenuItem("Clear All Functions")) {
-                    App::Get().GetSidebarPanel().GetExpressions().clear();
-                }
-                ImGui::EndMenu();
-            }
 
-            // 3. VIEW MENU
+
+            // 2. VIEW MENU
             if (ImGui::BeginMenu("View")) {
-                static bool show_grid = true;
-                if (ImGui::MenuItem("Show Grid & Axes", nullptr, &show_grid)) {}
+                auto& canvas = App::Get().GetGraphCanvas();
+
+                bool showGrid = canvas.IsGridEnabled();
+                if (ImGui::MenuItem("Grid & Axes", nullptr, &showGrid)) {
+                    canvas.SetGridEnabled(showGrid);
+                }
+
+                bool showAxisLabels = canvas.IsAxisLabelsEnabled();
+                if (ImGui::MenuItem("Axis Numbers", nullptr, &showAxisLabels)) {
+                    canvas.SetAxisLabelsEnabled(showAxisLabels);
+                }
+
+                ImGui::Separator();
+
+                bool showKeyPoints = canvas.IsKeyPointsEnabled();
+                if (ImGui::MenuItem("Key Points Markers", nullptr, &showKeyPoints)) {
+                    canvas.SetKeyPointsEnabled(showKeyPoints);
+                }
+
+                bool showTrace = canvas.IsTraceModeEnabled();
+                if (ImGui::MenuItem("Trace Hover Inspection", nullptr, &showTrace)) {
+                    canvas.SetTraceModeEnabled(showTrace);
+                }
+
+                ImGui::Separator();
+
+                bool showToolbar = canvas.IsToolbarEnabled();
+                if (ImGui::MenuItem("Canvas Info Toolbar", nullptr, &showToolbar)) {
+                    canvas.SetToolbarEnabled(showToolbar);
+                }
+
+                ImGui::Separator();
+
+                if (ImGui::MenuItem("Reset Viewport (1:1)", "Home")) {
+                    canvas.ResetView();
+                }
+
                 ImGui::EndMenu();
             }
 
-            // 4. HELP MENU
+            // 3. HELP MENU
             if (ImGui::BeginMenu("Help")) {
+                if (ImGui::MenuItem("Math Syntax Guide...", "F1")) {
+                    m_ShowMathGuidePopup = true;
+                }
+                if (ImGui::MenuItem("Shortcuts & Controls...")) {
+                    m_ShowShortcutsPopup = true;
+                }
+                ImGui::Separator();
                 if (ImGui::MenuItem("About GraphLab")) {
                     m_ShowAboutPopup = true;
                 }
@@ -85,6 +119,8 @@ namespace GraphLab::UI {
         }
 
         // Render Popups
+        ShowMathGuidePopup();
+        ShowShortcutsPopup();
         ShowAboutPopup();
         ShowNotificationPopup();
     }
@@ -194,17 +230,185 @@ namespace GraphLab::UI {
         }
     }
 
+    void MainMenuBar::ShowMathGuidePopup() {
+        if (m_ShowMathGuidePopup) {
+            ImGui::OpenPopup("Math Syntax Guide");
+            m_ShowMathGuidePopup = false;
+        }
+
+        ImGui::SetNextWindowSize(ImVec2(560.0f, 400.0f), ImGuiCond_FirstUseEver);
+        bool isOpen = true;
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+
+        if (ImGui::BeginPopupModal("Math Syntax Guide", &isOpen, flags)) {
+            if (!isOpen) {
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "GraphLab Supported Mathematical Functions & Syntax");
+            ImGui::Separator();
+
+            ImGuiTableFlags tableFlags = ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit;
+
+            if (ImGui::BeginTabBar("MathSyntaxTabs")) {
+                if (ImGui::BeginTabItem("Trigonometry")) {
+                    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                    if (ImGui::BeginTable("TrigTable", 3, tableFlags)) {
+                        ImGui::TableSetupColumn("Function", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+                        ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_WidthFixed, 200.0f);
+                        ImGui::TableSetupColumn("Example", ImGuiTableColumnFlags_WidthStretch);
+                        ImGui::TableHeadersRow();
+
+                        auto AddRow = [](const char* func, const char* desc, const char* ex) {
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0); ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", func);
+                            ImGui::TableSetColumnIndex(1); ImGui::Text("%s", desc);
+                            ImGui::TableSetColumnIndex(2); ImGui::TextDisabled("%s", ex);
+                        };
+
+                        AddRow("sin(x), cos(x)", "Sine / Cosine", "y = sin(2*x)");
+                        AddRow("tan(x), cot(x)", "Tangent / Cotangent", "y = tan(x)");
+                        AddRow("asin(x)", "ArcSine (Inverse Sine)", "y = asin(x)");
+                        AddRow("acos(x)", "ArcCosine", "y = acos(x)");
+                        AddRow("atan(x)", "ArcTangent", "y = atan(x)");
+
+                        ImGui::EndTable();
+                    }
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Powers & Logs")) {
+                    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                    if (ImGui::BeginTable("PowersTable", 3, tableFlags)) {
+                        ImGui::TableSetupColumn("Function", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+                        ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_WidthFixed, 200.0f);
+                        ImGui::TableSetupColumn("Example", ImGuiTableColumnFlags_WidthStretch);
+                        ImGui::TableHeadersRow();
+
+                        auto AddRow = [](const char* func, const char* desc, const char* ex) {
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0); ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", func);
+                            ImGui::TableSetColumnIndex(1); ImGui::Text("%s", desc);
+                            ImGui::TableSetColumnIndex(2); ImGui::TextDisabled("%s", ex);
+                        };
+
+                        AddRow("x^y", "Power", "y = x^3 - 2*x");
+                        AddRow("sqrt(x)", "Square Root", "y = sqrt(16 - x^2)");
+                        AddRow("cbrt(x)", "Cube Root", "y = cbrt(x)");
+                        AddRow("abs(x)", "Absolute Value", "y = abs(x - 2)");
+                        AddRow("log(x)", "Natural Logarithm (ln)", "y = log(x)");
+                        AddRow("log10(x)", "Base-10 Logarithm", "y = log10(x)");
+                        AddRow("exp(x)", "Exponential e^x", "y = exp(-x^2)");
+
+                        ImGui::EndTable();
+                    }
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Equations & Points")) {
+                    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                    if (ImGui::BeginTable("EqTable", 3, tableFlags)) {
+                        ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+                        ImGui::TableSetupColumn("Format", ImGuiTableColumnFlags_WidthFixed, 210.0f);
+                        ImGui::TableSetupColumn("Example", ImGuiTableColumnFlags_WidthStretch);
+                        ImGui::TableHeadersRow();
+
+                        auto AddRow = [](const char* type, const char* fmt, const char* ex) {
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0); ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", type);
+                            ImGui::TableSetColumnIndex(1); ImGui::Text("%s", fmt);
+                            ImGui::TableSetColumnIndex(2); ImGui::TextDisabled("%s", ex);
+                        };
+
+                        AddRow("Implicit Circle", "(x - a)^2 + (y - b)^2 = r^2", "(x-2)^2 + (y+1)^2 = 16");
+                        AddRow("Implicit Curve", "F(x, y) = 0", "x^2 + y^2 = 25");
+                        AddRow("2D Point Tuple", "(x, y)", "(1, 2)");
+                        AddRow("Point List", "(x1, y1), (x2, y2)", "(-2, 0), (0, 4), (2, 0)");
+                        AddRow("Constants", "pi, e", "y = sin(pi * x)");
+
+                        ImGui::EndTable();
+                    }
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button("Close", ImVec2(100.0f, 0.0f))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+    }
+
+    void MainMenuBar::ShowShortcutsPopup() {
+        if (m_ShowShortcutsPopup) {
+            ImGui::OpenPopup("Shortcuts & Controls");
+            m_ShowShortcutsPopup = false;
+        }
+
+        ImGui::SetNextWindowSize(ImVec2(500.0f, 320.0f), ImGuiCond_FirstUseEver);
+        bool isOpen = true;
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+
+        if (ImGui::BeginPopupModal("Shortcuts & Controls", &isOpen, flags)) {
+            if (!isOpen) {
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Mouse & Keyboard Interaction Shortcuts");
+            ImGui::Separator();
+
+            ImGuiTableFlags tableFlags = ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit;
+            if (ImGui::BeginTable("ShortcutsTable", 2, tableFlags)) {
+                ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+                ImGui::TableSetupColumn("Shortcut / Input", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableHeadersRow();
+
+                auto AddRow = [](const char* action, const char* shortcut) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0); ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", action);
+                    ImGui::TableSetColumnIndex(1); ImGui::TextDisabled("%s", shortcut);
+                };
+
+                AddRow("Pan / Drag Canvas", "Click & Drag Mouse or Middle Mouse");
+                AddRow("Cursor-Centered Zoom", "Scroll Mouse Wheel");
+                AddRow("Inspect / Pin Point", "Left-Click on Key Point Marker");
+                AddRow("Reset Viewport (1:1)", "Home Key or 'Reset View' Button");
+                AddRow("Import Project", "Ctrl + O");
+                AddRow("Export Project", "Ctrl + S");
+                AddRow("Export PNG Image", "Ctrl + E");
+
+                ImGui::EndTable();
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button("Close", ImVec2(100.0f, 0.0f))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+    }
+
     void MainMenuBar::ShowAboutPopup() {
         if (m_ShowAboutPopup) {
             ImGui::OpenPopup("About GraphLab");
             m_ShowAboutPopup = false;
         }
 
-        if (ImGui::BeginPopupModal("About GraphLab", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::Text("GraphLab - Graphing Calculator v1.0.0");
+        bool isOpen = true;
+        ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+
+        if (ImGui::BeginPopupModal("About GraphLab", &isOpen, flags)) {
+            if (!isOpen) {
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::Text("%s", GRAPHLAB_FULL_NAME);
             ImGui::Separator();
             ImGui::Text("A modern C++ 2D graphing desktop application.");
-            ImGui::Text("Powered by Dear ImGui & GLFW.");
+            ImGui::Text("Engine: Marching Squares + Bisection Refinement");
+            ImGui::Text("GUI & Graphics: Dear ImGui + OpenGL 3.3 + GLFW");
             ImGui::Text("License: MIT");
             ImGui::Separator();
 

@@ -188,8 +188,14 @@ namespace GraphLab::UI {
         ImGui::Begin("Expressions", nullptr, flags);
         ImGui::PopStyleVar(3);
         
-        if (ImGui::Button("+ Add Item", ImVec2(120.0f, 24.0f)))
+        if (ImGui::Button("+ Add Item", ImVec2(100.0f, 24.0f)))
             AddExpression();
+
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - 75.0f);
+        if (ImGui::Button("Clear All", ImVec2(75.0f, 24.0f))) {
+            ClearAll();
+        }
 
         ImGui::Separator();
         ImGui::Dummy(ImVec2(0.0f, 5.0f));
@@ -417,5 +423,11 @@ namespace GraphLab::UI {
                 break;
             }
         }
+    }
+
+    void SidebarPanel::ClearAll() {
+        m_Expressions.clear();
+        m_GlobalParams.clear();
+        m_NextId = 1;
     }
 }

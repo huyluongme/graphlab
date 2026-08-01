@@ -43,11 +43,20 @@ namespace GraphLab::UI {
 
         void OnRenderUI();
 
+        bool IsGridEnabled() const { return m_ShowGrid; }
+        void SetGridEnabled(bool enabled) { m_ShowGrid = enabled; }
+
+        bool IsAxisLabelsEnabled() const { return m_ShowAxisLabels; }
+        void SetAxisLabelsEnabled(bool enabled) { m_ShowAxisLabels = enabled; }
+
         bool IsKeyPointsEnabled() const { return m_EnableKeyPoints; }
         void SetKeyPointsEnabled(bool enabled) { m_EnableKeyPoints = enabled; }
 
         bool IsTraceModeEnabled() const { return m_EnableTraceMode; }
         void SetTraceModeEnabled(bool enabled) { m_EnableTraceMode = enabled; }
+
+        bool IsToolbarEnabled() const { return m_ShowCanvasToolbar; }
+        void SetToolbarEnabled(bool enabled) { m_ShowCanvasToolbar = enabled; }
 
         float GetZoom() const { return m_Zoom; }
         void SetZoom(float zoom) { m_Zoom = zoom; }
@@ -58,8 +67,9 @@ namespace GraphLab::UI {
         bool IsHideOverlayUI() const { return m_HideOverlayUI; }
         void SetHideOverlayUI(bool hide) { m_HideOverlayUI = hide; }
 
-    private:
         void ResetView();
+
+    private:
         ImVec2 WorldToScreen(ImVec2 world, ImVec2 originScreen) const;
         ImVec2 ScreenToWorld(ImVec2 screen, ImVec2 originScreen) const;
         void HandleInput(ImVec2 canvasPos, ImVec2 canvasSize);
@@ -79,6 +89,11 @@ namespace GraphLab::UI {
         bool m_PotentialDrag = false;                   // Mouse down pending drag threshold check
         ImVec2 m_DragStartMouse = ImVec2(0.0f, 0.0f);   // Mouse position at drag start
         ImVec2 m_DragStartPan = ImVec2(0.0f, 0.0f);     // Pan offset at drag start
+
+        // View Toggles
+        bool m_ShowGrid = true;
+        bool m_ShowAxisLabels = true;
+        bool m_ShowCanvasToolbar = true;
 
         // Key Points & Value Inspector / Hover Trace State
         bool m_EnableKeyPoints = true;

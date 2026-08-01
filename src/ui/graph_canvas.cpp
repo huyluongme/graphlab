@@ -65,8 +65,8 @@ namespace GraphLab::UI {
 
         drawList->PopClipRect();
 
-        // Render UI controls if not exporting clean image
-        if (!m_HideOverlayUI) {
+        // Render UI controls if not exporting clean image and toolbar is enabled
+        if (!m_HideOverlayUI && m_ShowCanvasToolbar) {
             ImGui::SetCursorPos(ImVec2(15.0f, 15.0f));
             ImGui::BeginGroup();
 
@@ -126,6 +126,13 @@ namespace GraphLab::UI {
      * @param canvasSize The size of the canvas.
      */
     void GraphCanvas::HandleInput(ImVec2 canvasPos, ImVec2 canvasSize) {
+        // Block all canvas dragging, zooming, and input if any modal/popup window is active
+        if (ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId)) {
+            m_IsDragging = false;
+            m_PotentialDrag = false;
+            return;
+        }
+
         ImGuiIO& io = ImGui::GetIO();
         ImVec2 mousePos = io.MousePos;
 
@@ -202,14 +209,18 @@ namespace GraphLab::UI {
         float startX = std::floor((canvasPos.x - originScreen.x) / stepPixels) * stepPixels + originScreen.x;
         for (float x = startX; x <= canvasPos.x + canvasSize.x; x += stepPixels) {
             if (x >= canvasPos.x) {
-                drawList->AddLine(ImVec2(x, canvasPos.y), ImVec2(x, canvasPos.y + canvasSize.y), gridColor, 1.0f);
+                if (m_ShowGrid) {
+                    drawList->AddLine(ImVec2(x, canvasPos.y), ImVec2(x, canvasPos.y + canvasSize.y), gridColor, 1.0f);
+                }
 
                 // Draw X Axis Numbers
-                float worldX = (x - originScreen.x) / m_Zoom;
-                if (std::abs(worldX) > 0.001f) {
-                    char buf[16];
-                    snprintf(buf, sizeof(buf), "%.1f", worldX);
-                    drawList->AddText(ImVec2(x + 3.0f, std::clamp(originScreen.y + 3.0f, canvasPos.y, canvasPos.y + canvasSize.y - 20.0f)), textColor, buf);
+                if (m_ShowAxisLabels) {
+                    float worldX = (x - originScreen.x) / m_Zoom;
+                    if (std::abs(worldX) > 0.001f) {
+                        char buf[16];
+                        snprintf(buf, sizeof(buf), "%.1f", worldX);
+                        drawList->AddText(ImVec2(x + 3.0f, std::clamp(originScreen.y + 3.0f, canvasPos.y, canvasPos.y + canvasSize.y - 20.0f)), textColor, buf);
+                    }
                 }
             }
         }
@@ -218,14 +229,18 @@ namespace GraphLab::UI {
         float startY = std::floor((canvasPos.y - originScreen.y) / stepPixels) * stepPixels + originScreen.y;
         for (float y = startY; y <= canvasPos.y + canvasSize.y; y += stepPixels) {
             if (y >= canvasPos.y) {
-                drawList->AddLine(ImVec2(canvasPos.x, y), ImVec2(canvasPos.x + canvasSize.x, y), gridColor, 1.0f);
+                if (m_ShowGrid) {
+                    drawList->AddLine(ImVec2(canvasPos.x, y), ImVec2(canvasPos.x + canvasSize.x, y), gridColor, 1.0f);
+                }
 
                 // Draw Y Axis Numbers
-                float worldY = (originScreen.y - y) / m_Zoom;
-                if (std::abs(worldY) > 0.001f) {
-                    char buf[16];
-                    snprintf(buf, sizeof(buf), "%.1f", worldY);
-                    drawList->AddText(ImVec2(std::clamp(originScreen.x + 4.0f, canvasPos.x + 4.0f, canvasPos.x + canvasSize.x - 40.0f), y - 14.0f), textColor, buf);
+                if (m_ShowAxisLabels) {
+                    float worldY = (originScreen.y - y) / m_Zoom;
+                    if (std::abs(worldY) > 0.001f) {
+                        char buf[16];
+                        snprintf(buf, sizeof(buf), "%.1f", worldY);
+                        drawList->AddText(ImVec2(std::clamp(originScreen.x + 4.0f, canvasPos.x + 4.0f, canvasPos.x + canvasSize.x - 40.0f), y - 14.0f), textColor, buf);
+                    }
                 }
             }
         }
@@ -238,6 +253,9 @@ namespace GraphLab::UI {
             drawList->AddLine(ImVec2(canvasPos.x, originScreen.y), ImVec2(canvasPos.x + canvasSize.x, originScreen.y), axisColor, 1.0f);
 
         // Draw Origin Label (0)
+        if (m_ShowAxisLabels) {
+            drawList->AddText(ImVec2(originScreen.x + 5.0f, originScreen.y + 5.0f), textColor, "0");
+        }
         drawList->AddText(ImVec2(originScreen.x + 5.0f, originScreen.y + 5.0f), textColor, "0");
     }
 
