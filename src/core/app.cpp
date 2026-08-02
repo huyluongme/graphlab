@@ -1,4 +1,5 @@
 #include "app.h"
+#include "ui/icons.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -158,16 +159,41 @@ namespace GraphLab {
         float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
         ImGuiStyle& style = ImGui::GetStyle();
         style.ScaleAllSizes(main_scale);
+        style.WindowRounding = 8.0f;
+        style.ChildRounding = 8.0f;
+        style.FrameRounding = 5.0f;
+        style.PopupRounding = 8.0f;
+        style.GrabRounding = 5.0f;
+        style.TabRounding = 5.0f;
+        style.ScrollbarRounding = 6.0f;
         style.AntiAliasedLines = true;
         style.AntiAliasedLinesUseTex = true;
 
         // Load Inter-Medium font with full Vietnamese Unicode glyph ranges
         const ImWchar* vietnamese_ranges = io.Fonts->GetGlyphRangesVietnamese();
-        const char* inter_font_path = "../../assets/fonts/Inter_18pt-Medium.ttf";
+        const char* inter_font_paths[] = { "assets/fonts/Inter_18pt-Medium.ttf", "../assets/fonts/Inter_18pt-Medium.ttf", "../../assets/fonts/Inter_18pt-Medium.ttf" };
         float font_size = 18.0f * main_scale;
-        if (FILE* f = fopen(inter_font_path, "rb")) {
-            fclose(f);
-            io.Fonts->AddFontFromFileTTF(inter_font_path, font_size, nullptr, vietnamese_ranges);
+        for (const char* path : inter_font_paths) {
+            if (FILE* f = fopen(path, "rb")) {
+                fclose(f);
+                io.Fonts->AddFontFromFileTTF(path, font_size, nullptr, vietnamese_ranges);
+                break;
+            }
+        }
+
+        // Load FontAwesome 6 Free Solid icons merged with primary font
+        static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+        ImFontConfig icons_config;
+        icons_config.MergeMode = true;
+        icons_config.PixelSnapH = true;
+        icons_config.GlyphOffset = ImVec2(0.0f, -1.0f);
+        const char* icon_paths[] = { "assets/fonts/fa-solid-900.ttf", "../assets/fonts/fa-solid-900.ttf", "../../assets/fonts/fa-solid-900.ttf" };
+        for (const char* path : icon_paths) {
+            if (FILE* f = fopen(path, "rb")) {
+                fclose(f);
+                io.Fonts->AddFontFromFileTTF(path, font_size * 0.85f, &icons_config, icons_ranges);
+                break;
+            }
         }
 
         ImGui_ImplGlfw_InitForOpenGL(m_Window, true);

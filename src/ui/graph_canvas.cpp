@@ -1,5 +1,6 @@
 #include "graph_canvas.h"
 #include "core/app.h"
+#include "ui/icons.h"
 #include "imgui.h"
 
 #include <cmath>
@@ -70,14 +71,22 @@ namespace GraphLab::UI {
             ImGui::SetCursorPos(ImVec2(15.0f, 15.0f));
             ImGui::BeginGroup();
 
-            if (ImGui::Button("Reset View (1:1)"))
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(12.0f, 4.0f));
+
+            if (ImGui::Button(ICON_FA_LOCATION_CROSSHAIRS "  Reset View (1:1)"))
                 ResetView();
 
             ImGui::SameLine();
-            ImGui::Checkbox("Key Points", &m_EnableKeyPoints);
-            ImGui::SameLine();
-            ImGui::Checkbox("Trace Hover", &m_EnableTraceMode);
+            ImGui::Checkbox(ICON_FA_BULLSEYE "  Key Points", &m_EnableKeyPoints);
 
+            ImGui::SameLine();
+            ImGui::Checkbox(ICON_FA_CROSSHAIRS "  Trace Hover", &m_EnableTraceMode);
+
+            ImGui::PopStyleVar(3);
+
+            ImGui::Dummy(ImVec2(0.0f, 2.0f));
             ImGui::TextDisabled("FPS: %.1f", io.Framerate);
             ImGui::TextDisabled("Frame: %.2f ms", 1000.0f / std::max(io.Framerate, 1.0f));
             ImGui::TextDisabled("Zoom: %.1f", m_Zoom);

@@ -1,4 +1,5 @@
 #include "ui/main_menu_bar.h"
+#include "ui/icons.h"
 #include "version.h"
 #include "core/app.h"
 #include "utils/file_dialog.h"
@@ -18,7 +19,7 @@ namespace GraphLab::UI {
         if (ImGui::BeginMainMenuBar()) {
             // 1. FILE MENU (Import Project, Export Project, Export Graph Image with native file dialogs)
             if (ImGui::BeginMenu("File")) {
-                if (ImGui::MenuItem("Import Project...", "Ctrl+O")) {
+                if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Import Project...", "Ctrl+O")) {
                     std::string path = Utils::FileDialog::Open(
                         App::Get().GetNativeWindow(),
                         "GraphLab Project (*.graphlab)\0*.graphlab\0All Files (*.*)\0*.*\0"
@@ -27,7 +28,7 @@ namespace GraphLab::UI {
                         ImportProject(path);
                     }
                 }
-                if (ImGui::MenuItem("Export Project...", "Ctrl+S")) {
+                if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Export Project...", "Ctrl+S")) {
                     std::string path = Utils::FileDialog::Save(
                         App::Get().GetNativeWindow(),
                         "GraphLab Project (*.graphlab)\0*.graphlab\0All Files (*.*)\0*.*\0",
@@ -38,7 +39,7 @@ namespace GraphLab::UI {
                     }
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Export PNG Image...", "Ctrl+E")) {
+                if (ImGui::MenuItem(ICON_FA_IMAGE "  Export PNG Image...", "Ctrl+E")) {
                     std::string path = Utils::FileDialog::Save(
                         App::Get().GetNativeWindow(),
                         "PNG Image (*.png)\0*.png\0All Files (*.*)\0*.*\0",
@@ -49,51 +50,49 @@ namespace GraphLab::UI {
                     }
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Exit", "Alt+F4")) {
+                if (ImGui::MenuItem(ICON_FA_RIGHT_FROM_BRACKET "  Exit", "Alt+F4")) {
                     App::Get().Close();
                 }
 
                 ImGui::EndMenu();
             }
 
-
-
             // 2. VIEW MENU
             if (ImGui::BeginMenu("View")) {
                 auto& canvas = App::Get().GetGraphCanvas();
 
                 bool showGrid = canvas.IsGridEnabled();
-                if (ImGui::MenuItem("Grid & Axes", nullptr, &showGrid)) {
+                if (ImGui::MenuItem(ICON_FA_TABLE_CELLS "  Grid & Axes", nullptr, &showGrid)) {
                     canvas.SetGridEnabled(showGrid);
                 }
 
                 bool showAxisLabels = canvas.IsAxisLabelsEnabled();
-                if (ImGui::MenuItem("Axis Numbers", nullptr, &showAxisLabels)) {
+                if (ImGui::MenuItem(ICON_FA_HASHTAG "  Axis Numbers", nullptr, &showAxisLabels)) {
                     canvas.SetAxisLabelsEnabled(showAxisLabels);
                 }
 
                 ImGui::Separator();
 
                 bool showKeyPoints = canvas.IsKeyPointsEnabled();
-                if (ImGui::MenuItem("Key Points Markers", nullptr, &showKeyPoints)) {
+                if (ImGui::MenuItem(ICON_FA_BULLSEYE "  Key Points Markers", nullptr, &showKeyPoints)) {
                     canvas.SetKeyPointsEnabled(showKeyPoints);
                 }
 
                 bool showTrace = canvas.IsTraceModeEnabled();
-                if (ImGui::MenuItem("Trace Hover Inspection", nullptr, &showTrace)) {
+                if (ImGui::MenuItem(ICON_FA_CROSSHAIRS "  Trace Hover Inspection", nullptr, &showTrace)) {
                     canvas.SetTraceModeEnabled(showTrace);
                 }
 
                 ImGui::Separator();
 
                 bool showToolbar = canvas.IsToolbarEnabled();
-                if (ImGui::MenuItem("Canvas Info Toolbar", nullptr, &showToolbar)) {
+                if (ImGui::MenuItem(ICON_FA_SLIDERS "  Canvas Info Toolbar", nullptr, &showToolbar)) {
                     canvas.SetToolbarEnabled(showToolbar);
                 }
 
                 ImGui::Separator();
 
-                if (ImGui::MenuItem("Reset Viewport (1:1)", "Home")) {
+                if (ImGui::MenuItem(ICON_FA_LOCATION_CROSSHAIRS "  Reset Viewport (1:1)", "Home")) {
                     canvas.ResetView();
                 }
 
@@ -102,14 +101,14 @@ namespace GraphLab::UI {
 
             // 3. HELP MENU
             if (ImGui::BeginMenu("Help")) {
-                if (ImGui::MenuItem("Math Syntax Guide...", "F1")) {
+                if (ImGui::MenuItem(ICON_FA_BOOK "  Math Syntax Guide...", "F1")) {
                     m_ShowMathGuidePopup = true;
                 }
-                if (ImGui::MenuItem("Shortcuts & Controls...")) {
+                if (ImGui::MenuItem(ICON_FA_KEYBOARD "  Shortcuts & Controls...")) {
                     m_ShowShortcutsPopup = true;
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("About GraphLab")) {
+                if (ImGui::MenuItem(ICON_FA_CIRCLE_INFO "  About GraphLab")) {
                     m_ShowAboutPopup = true;
                 }
                 ImGui::EndMenu();
@@ -219,15 +218,22 @@ namespace GraphLab::UI {
             m_ShowNotificationPopup = false;
         }
 
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 14.0f));
         if (ImGui::BeginPopupModal("Notification", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::Text("%s", m_NotificationMessage.c_str());
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
             ImGui::Separator();
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
-            if (ImGui::Button("OK", ImVec2(120, 0))) {
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+            if (ImGui::Button("OK", ImVec2(120.0f, 28.0f))) {
                 ImGui::CloseCurrentPopup();
             }
+            ImGui::PopStyleVar();
             ImGui::EndPopup();
         }
+        ImGui::PopStyleVar(2);
     }
 
     void MainMenuBar::ShowMathGuidePopup() {
@@ -236,10 +242,12 @@ namespace GraphLab::UI {
             m_ShowMathGuidePopup = false;
         }
 
-        ImGui::SetNextWindowSize(ImVec2(560.0f, 400.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(580.0f, 420.0f), ImGuiCond_FirstUseEver);
         bool isOpen = true;
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
 
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 14.0f));
         if (ImGui::BeginPopupModal("Math Syntax Guide", &isOpen, flags)) {
             if (!isOpen) {
                 ImGui::CloseCurrentPopup();
@@ -247,9 +255,11 @@ namespace GraphLab::UI {
 
             ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "GraphLab Supported Mathematical Functions & Syntax");
             ImGui::Separator();
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
 
             ImGuiTableFlags tableFlags = ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit;
 
+            ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 5.0f);
             if (ImGui::BeginTabBar("MathSyntaxTabs")) {
                 if (ImGui::BeginTabItem("Trigonometry")) {
                     ImGui::Dummy(ImVec2(0.0f, 4.0f));
@@ -332,13 +342,20 @@ namespace GraphLab::UI {
                 }
                 ImGui::EndTabBar();
             }
+            ImGui::PopStyleVar(); // TabRounding
 
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
             ImGui::Separator();
-            if (ImGui::Button("Close", ImVec2(100.0f, 0.0f))) {
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
+
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+            if (ImGui::Button("Close", ImVec2(100.0f, 28.0f))) {
                 ImGui::CloseCurrentPopup();
             }
+            ImGui::PopStyleVar();
             ImGui::EndPopup();
         }
+        ImGui::PopStyleVar(2);
     }
 
     void MainMenuBar::ShowShortcutsPopup() {
@@ -347,10 +364,12 @@ namespace GraphLab::UI {
             m_ShowShortcutsPopup = false;
         }
 
-        ImGui::SetNextWindowSize(ImVec2(500.0f, 320.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(520.0f, 340.0f), ImGuiCond_FirstUseEver);
         bool isOpen = true;
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
 
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 14.0f));
         if (ImGui::BeginPopupModal("Shortcuts & Controls", &isOpen, flags)) {
             if (!isOpen) {
                 ImGui::CloseCurrentPopup();
@@ -358,6 +377,7 @@ namespace GraphLab::UI {
 
             ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Mouse & Keyboard Interaction Shortcuts");
             ImGui::Separator();
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
 
             ImGuiTableFlags tableFlags = ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit;
             if (ImGui::BeginTable("ShortcutsTable", 2, tableFlags)) {
@@ -382,12 +402,18 @@ namespace GraphLab::UI {
                 ImGui::EndTable();
             }
 
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
             ImGui::Separator();
-            if (ImGui::Button("Close", ImVec2(100.0f, 0.0f))) {
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
+
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+            if (ImGui::Button("Close", ImVec2(100.0f, 28.0f))) {
                 ImGui::CloseCurrentPopup();
             }
+            ImGui::PopStyleVar();
             ImGui::EndPopup();
         }
+        ImGui::PopStyleVar(2);
     }
 
     void MainMenuBar::ShowAboutPopup() {
@@ -399,6 +425,8 @@ namespace GraphLab::UI {
         bool isOpen = true;
         ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
 
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 14.0f));
         if (ImGui::BeginPopupModal("About GraphLab", &isOpen, flags)) {
             if (!isOpen) {
                 ImGui::CloseCurrentPopup();
@@ -406,17 +434,23 @@ namespace GraphLab::UI {
 
             ImGui::Text("%s", GRAPHLAB_FULL_NAME);
             ImGui::Separator();
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
             ImGui::Text("A modern C++ 2D graphing desktop application.");
             ImGui::Text("Engine: Marching Squares + Bisection Refinement");
             ImGui::Text("GUI & Graphics: Dear ImGui + OpenGL 3.3 + GLFW");
             ImGui::Text("License: MIT");
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
             ImGui::Separator();
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
-            if (ImGui::Button("Close", ImVec2(120, 0))) {
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+            if (ImGui::Button("Close", ImVec2(120.0f, 28.0f))) {
                 ImGui::CloseCurrentPopup();
             }
+            ImGui::PopStyleVar();
             ImGui::EndPopup();
         }
+        ImGui::PopStyleVar(2);
     }
 
 } // namespace GraphLab::UI

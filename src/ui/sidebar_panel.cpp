@@ -1,4 +1,5 @@
 #include "sidebar_panel.h"
+#include "ui/icons.h"
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -188,14 +189,24 @@ namespace GraphLab::UI {
         ImGui::Begin("Expressions", nullptr, flags);
         ImGui::PopStyleVar(3);
         
-        if (ImGui::Button("+ Add Item", ImVec2(100.0f, 24.0f)))
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
+
+        if (ImGui::Button(ICON_FA_PLUS "  Add Item"))
             AddExpression();
 
         ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - 75.0f);
-        if (ImGui::Button("Clear All", ImVec2(75.0f, 24.0f))) {
+        float headerAvailW = ImGui::GetContentRegionAvail().x;
+        float clearBtnW = ImGui::CalcTextSize(ICON_FA_TRASH_CAN "  Clear All").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, headerAvailW - clearBtnW));
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.22f, 0.28f, 0.70f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.20f, 0.20f, 0.85f));
+        if (ImGui::Button(ICON_FA_TRASH_CAN "  Clear All")) {
             ClearAll();
         }
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(2);
 
         ImGui::Separator();
         ImGui::Dummy(ImVec2(0.0f, 5.0f));
@@ -212,18 +223,31 @@ namespace GraphLab::UI {
             auto& exp = m_Expressions[i];
             ImGui::PushID(exp.id);
 
-            // Function Header Card
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
+            // Function Header Card - Standardized Frame Dimension & Spacing
+            float btnDim = 28.0f;
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 5.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 4.0f));
 
-            ImGui::Checkbox("##visible", &exp.visible);
-            ImGui::SameLine();
+            // Eye Icon Visibility Toggle Button
+            ImGui::PushStyleColor(ImGuiCol_Button, exp.visible ? ImVec4(0.20f, 0.45f, 0.85f, 0.85f) : ImVec4(0.20f, 0.22f, 0.28f, 0.60f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, exp.visible ? ImVec4(0.25f, 0.55f, 0.95f, 1.00f) : ImVec4(0.28f, 0.30f, 0.38f, 0.80f));
+            if (ImGui::Button(exp.visible ? ICON_FA_EYE : ICON_FA_EYE_SLASH, ImVec2(btnDim, btnDim))) {
+                exp.visible = !exp.visible;
+            }
+            ImGui::PopStyleColor(2);
             
+            // Color Picker Square
+            ImGui::SameLine();
+            ImGui::PushItemWidth(btnDim);
             ImGuiColorEditFlags color_flags = ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoAlpha;
             ImGui::ColorEdit4("##color", (float*)&exp.color, color_flags);
-            ImGui::SameLine();
+            ImGui::PopItemWidth();
 
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 30.0f);
+            // Expression Input Text Box
+            ImGui::SameLine();
+            float availForInput = ImGui::GetContentRegionAvail().x - (btnDim + 6.0f);
+            ImGui::SetNextItemWidth(std::max(40.0f, availForInput));
             ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_CallbackEdit;
             if (ImGui::InputText("##expr", exp.name, sizeof(exp.name), inputFlags, MathInputTextCallback)) {
                 // Auto-beautify ASCII input (e.g. x^10 -> x¹⁰, pi -> π, * -> ·)
@@ -232,9 +256,15 @@ namespace GraphLab::UI {
                 exp.Recompile();
             }
 
+            // Delete Button [X]
             ImGui::SameLine();
-            if (ImGui::Button("X", ImVec2(22.0f, 22.0f)))
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.22f, 0.28f, 0.60f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.80f, 0.20f, 0.20f, 0.90f));
+            if (ImGui::Button(ICON_FA_XMARK, ImVec2(btnDim, btnDim)))
                 id_to_remove = exp.id;
+            ImGui::PopStyleColor(2);
+
+            ImGui::PopStyleVar(3);
 
             // Evaluation Result Pill (Desmos style: = -0.598...) if function evaluates to a valid constant/value
             if (!exp.isPoint && exp.visible && exp.evaluator.IsValid() && !exp.evaluator.IsImplicit()) {
@@ -268,8 +298,6 @@ namespace GraphLab::UI {
                 ImGui::Unindent(28.0f);
             }
 
-            ImGui::PopStyleVar(2);
-
             // Render Desmos-style Parameter Slider Cards right underneath this expression card
             if (exp.visible && exp.evaluator.IsValid() && !exp.evaluator.GetParamNames().empty()) {
                 for (const auto& pName : exp.evaluator.GetParamNames()) {
@@ -282,64 +310,79 @@ namespace GraphLab::UI {
                     ImGui::Dummy(ImVec2(0.0f, 4.0f));
 
                     // Desmos Parameter Card Container Box
-                    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
-                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.14f, 0.16f, 0.22f, 0.7f));
-                    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.30f, 0.42f, 0.5f));
+                    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.14f, 0.20f, 0.75f));
+                    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.27f, 0.38f, 0.60f));
 
-                    ImGui::BeginChild(pName.c_str(), ImVec2(0.0f, 60.0f), true, ImGuiWindowFlags_NoScrollbar);
+                    ImGui::BeginChild(pName.c_str(), ImVec2(0.0f, 72.0f), true, ImGuiWindowFlags_NoScrollbar);
 
-                    // Row 1: Animation Play/Pause circular button + Title "a = -2.50" + Reset button
-                    const char* playIcon = state.isPlaying ? "||" : ">";
-                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f); // Round play button
-                    if (ImGui::Button(playIcon, ImVec2(22.0f, 22.0f))) {
+                    // Row 1: Animation Play/Pause button + Title "a = -2.50" + Reset button
+                    const char* playIcon = state.isPlaying ? ICON_FA_PAUSE : ICON_FA_PLAY;
+
+                    float pBtnDim = 26.0f;
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+                    ImGui::PushStyleColor(ImGuiCol_Button, state.isPlaying ? ImVec4(0.85f, 0.45f, 0.15f, 0.90f) : ImVec4(0.20f, 0.45f, 0.85f, 0.85f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, state.isPlaying ? ImVec4(0.95f, 0.55f, 0.20f, 1.00f) : ImVec4(0.25f, 0.55f, 0.95f, 1.00f));
+                    if (ImGui::Button(playIcon, ImVec2(pBtnDim, pBtnDim))) {
                         state.isPlaying = !state.isPlaying;
                     }
-                    ImGui::PopStyleVar();
-                    ImGui::SameLine();
+                    ImGui::PopStyleColor(2);
+                    ImGui::PopStyleVar(2);
 
-                    // Display Parameter Title
-                    ImGui::TextUnformatted(pName.c_str());
-                    ImGui::SameLine();
-                    ImGui::Text("= %.2f", state.value);
+                    ImGui::SameLine(0.0f, 8.0f);
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::Text("%s = %.2f", pName.c_str(), state.value);
 
-                    // Reset button aligned right
-                    ImGui::SameLine(ImGui::GetContentRegionAvail().x - 20.0f);
-                    if (ImGui::Button("R", ImVec2(20.0f, 20.0f))) {
+                    // Reset button aligned flush right (matching 26x26 squarish button)
+                    float resetAvail = ImGui::GetContentRegionAvail().x - pBtnDim;
+                    ImGui::SameLine(ImGui::GetCursorPosX() + std::max(0.0f, resetAvail));
+
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.22f, 0.28f, 0.60f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.80f, 0.20f, 0.20f, 0.90f));
+                    if (ImGui::Button(ICON_FA_ROTATE_LEFT, ImVec2(pBtnDim, pBtnDim))) {
                         state.value = 1.0;
                         state.minVal = -10.0f;
                         state.maxVal = 10.0f;
                         state.isPlaying = false;
                     }
+                    ImGui::PopStyleColor(2);
+                    ImGui::PopStyleVar(2);
 
                     // Row 2: Desmos Clean Slider Track flanked by Min & Max bounds
-                    ImGui::Dummy(ImVec2(0.0f, 2.0f));
+                    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 5.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 0.0f));
 
                     // Min Limit Input
-                    ImGui::SetNextItemWidth(36.0f);
+                    ImGui::SetNextItemWidth(40.0f);
                     if (ImGui::InputFloat("##min", &state.minVal, 0.0f, 0.0f, "%.0f")) {
                         if (state.minVal >= state.maxVal) state.minVal = state.maxVal - 1.0f;
                     }
                     ImGui::SameLine();
 
-                    // Slider Track (Full width without text overlay clutter)
+                    // Slider Track
                     float valFloat = static_cast<float>(state.value);
-                    float availW = ImGui::GetContentRegionAvail().x - 44.0f;
-                    ImGui::SetNextItemWidth(std::max(60.0f, availW));
+                    float availForSlider = ImGui::GetContentRegionAvail().x - (40.0f + 6.0f);
+                    ImGui::SetNextItemWidth(std::max(50.0f, availForSlider));
 
-                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-                    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 8.0f);
                     if (ImGui::SliderFloat("##slider", &valFloat, state.minVal, state.maxVal, "")) {
                         state.value = static_cast<double>(valFloat);
                     }
-                    ImGui::PopStyleVar(2);
                     ImGui::SameLine();
 
                     // Max Limit Input
-                    ImGui::SetNextItemWidth(36.0f);
+                    ImGui::SetNextItemWidth(40.0f);
                     if (ImGui::InputFloat("##max", &state.maxVal, 0.0f, 0.0f, "%.0f")) {
                         if (state.maxVal <= state.minVal) state.maxVal = state.minVal + 1.0f;
                     }
+
+                    ImGui::PopStyleVar(3);
 
                     ImGui::EndChild();
                     ImGui::PopStyleColor(2);
