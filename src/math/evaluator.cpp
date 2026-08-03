@@ -185,23 +185,44 @@ namespace GraphLab::Math {
         }
 
         std::string normalizedExpression = NormalizeUnicodeMath(expression);
-        const size_t equalPos = normalizedExpression.find('=');
 
-        if (equalPos != std::string::npos) {
+        m_Relation = RelationType::None;
+        size_t relPos = std::string::npos;
+        size_t relLen = 0;
+
+        // Search for relational operators in order: <=, >=, !=, <, >, =
+        const std::vector<std::pair<std::string, RelationType>> relOps = {
+            {"<=", RelationType::LessEqual},
+            {">=", RelationType::GreaterEqual},
+            {"!=", RelationType::NotEqual},
+            {"<",  RelationType::Less},
+            {">",  RelationType::Greater},
+            {"=",  RelationType::Equal}
+        };
+
+        for (const auto& [opStr, type] : relOps) {
+            size_t pos = normalizedExpression.find(opStr);
+            if (pos != std::string::npos) {
+                // Prevent matching '<' when '<=' is present, or '>' when '>=' is present
+                if (opStr == "<" && pos + 1 < normalizedExpression.length() && normalizedExpression[pos + 1] == '=') continue;
+                if (opStr == ">" && pos + 1 < normalizedExpression.length() && normalizedExpression[pos + 1] == '=') continue;
+                
+                m_Relation = type;
+                relPos = pos;
+                relLen = opStr.length();
+                break;
+            }
+        }
+
+        if (m_Relation != RelationType::None) {
             m_IsEquation = true;
 
-            // Reject multiple '=' characters.
-            if (normalizedExpression.find('=', equalPos + 1) != std::string::npos) {
-                m_LastError = "Only one '=' operator is supported.";
-                return false;
-            }
-
-            std::string left = normalizedExpression.substr(0, equalPos);
-            std::string right = normalizedExpression.substr(equalPos + 1);
+            std::string left = normalizedExpression.substr(0, relPos);
+            std::string right = normalizedExpression.substr(relPos + relLen);
 
             if (left.find_first_not_of(" \t\r\n") == std::string::npos ||
                 right.find_first_not_of(" \t\r\n") == std::string::npos) {
-                m_LastError = "Both sides of the equation are required.";
+                m_LastError = "Both sides of the equation or inequality are required.";
                 return false;
             }
 

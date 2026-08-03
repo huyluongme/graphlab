@@ -5,6 +5,16 @@
 #include <unordered_map>
 
 namespace GraphLab::Math {
+    enum class RelationType {
+        None,           // Standard expression f(x)
+        Equal,          // =
+        Less,           // <
+        Greater,        // >
+        LessEqual,      // <=
+        GreaterEqual,   // >=
+        NotEqual        // !=
+    };
+
     /**
      * @brief Math expression evaluator engine using Shunting-Yard and RPN.
      */
@@ -81,6 +91,9 @@ namespace GraphLab::Math {
         bool IsValid() const { return m_IsValid; }
         bool IsImplicit() const { return m_IsImplicit; }
         bool IsEquation() const { return m_IsEquation; }
+        bool IsInequality() const { return m_Relation != RelationType::None && m_Relation != RelationType::Equal; }
+        bool IsStrictInequality() const { return m_Relation == RelationType::Less || m_Relation == RelationType::Greater; }
+        RelationType GetRelation() const { return m_Relation; }
         const std::string& GetError() const { return m_LastError; }
         const std::string& GetExpression() const { return m_Expression; }
 
@@ -103,6 +116,7 @@ namespace GraphLab::Math {
         bool m_IsValid = false;
         bool m_IsImplicit = false;
         bool m_IsEquation = false;
+        RelationType m_Relation = RelationType::None;
         std::string m_LastError;
     };
 }

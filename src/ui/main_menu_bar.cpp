@@ -332,6 +332,7 @@ namespace GraphLab::UI {
 
                         AddRow("Implicit Circle", "(x - a)^2 + (y - b)^2 = r^2", "(x-2)^2 + (y+1)^2 = 16");
                         AddRow("Implicit Curve", "F(x, y) = 0", "x^2 + y^2 = 25");
+                        AddRow("Inequalities", "y < f(x), x^2 + y^2 <= r^2", "y < x^2 - 4, x^2 + y^2 <= 16");
                         AddRow("2D Point Tuple", "(x, y)", "(1, 2)");
                         AddRow("Point List", "(x1, y1), (x2, y2)", "(-2, 0), (0, 4), (2, 0)");
                         AddRow("Constants", "pi, e", "y = sin(pi * x)");

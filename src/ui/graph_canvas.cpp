@@ -11,6 +11,48 @@
 #include <unordered_map>
 
 namespace GraphLab::UI {
+    static void DrawDashedPolyline(ImDrawList* drawList, const ImVec2* points, int numPoints, ImU32 color, float dashLen = 8.0f, float gapLen = 6.0f, float thickness = 2.5f) {
+        if (numPoints < 2) return;
+        float currentDash = 0.0f;
+        bool drawing = true;
+
+        for (int i = 0; i < numPoints - 1; ++i) {
+            ImVec2 p1 = points[i];
+            ImVec2 p2 = points[i + 1];
+            float dx = p2.x - p1.x;
+            float dy = p2.y - p1.y;
+            float dist = std::sqrt(dx * dx + dy * dy);
+            if (dist <= 0.0001f) continue;
+
+            float ux = dx / dist;
+            float uy = dy / dist;
+            float traveled = 0.0f;
+
+            while (traveled < dist) {
+                float step = drawing ? (dashLen - currentDash) : (gapLen - currentDash);
+                float remaining = dist - traveled;
+                float actualStep = std::min(step, remaining);
+
+                ImVec2 seg1(p1.x + ux * traveled, p1.y + uy * traveled);
+                traveled += actualStep;
+                ImVec2 seg2(p1.x + ux * traveled, p1.y + uy * traveled);
+
+                if (drawing) {
+                    drawList->AddLine(seg1, seg2, color, thickness);
+                }
+
+                currentDash += actualStep;
+                if (drawing && currentDash >= dashLen) {
+                    drawing = false;
+                    currentDash = 0.0f;
+                } else if (!drawing && currentDash >= gapLen) {
+                    drawing = true;
+                    currentDash = 0.0f;
+                }
+            }
+        }
+    }
+
     GraphCanvas::GraphCanvas() {}
 
     /**
@@ -391,6 +433,40 @@ namespace GraphLab::UI {
             return true;
         };
 
+        auto renderSegment = [&](const std::vector<ImVec2>& seg) {
+            if (seg.size() < 2) return;
+
+            if (evaluator.IsInequality()) {
+                // 1. Translucent Region Shading
+                ImVec4 colFloat = ImGui::ColorConvertU32ToFloat4(color);
+                ImU32 shadingColor = ImGui::ColorConvertFloat4ToU32(ImVec4(colFloat.x, colFloat.y, colFloat.z, 0.22f));
+
+                std::vector<ImVec2> poly = seg;
+                Math::RelationType rel = evaluator.GetRelation();
+
+                if (rel == Math::RelationType::Less || rel == Math::RelationType::LessEqual) {
+                    float bottomY = canvasPos.y + canvasSize.y;
+                    poly.push_back(ImVec2(seg.back().x, bottomY));
+                    poly.push_back(ImVec2(seg.front().x, bottomY));
+                } else if (rel == Math::RelationType::Greater || rel == Math::RelationType::GreaterEqual) {
+                    float topY = canvasPos.y;
+                    poly.push_back(ImVec2(seg.back().x, topY));
+                    poly.push_back(ImVec2(seg.front().x, topY));
+                }
+
+                drawList->AddConvexPolyFilled(poly.data(), static_cast<int>(poly.size()), shadingColor);
+
+                // 2. Render Boundary Curve (Dashed for strict inequalities, solid for inclusive)
+                if (evaluator.IsStrictInequality()) {
+                    DrawDashedPolyline(drawList, seg.data(), static_cast<int>(seg.size()), color, 8.0f, 6.0f, 2.5f);
+                } else {
+                    drawList->AddPolyline(seg.data(), static_cast<int>(seg.size()), color, 0, 2.5f);
+                }
+            } else {
+                drawList->AddPolyline(seg.data(), static_cast<int>(seg.size()), color, 0, 2.5f);
+            }
+        };
+
         std::vector<ImVec2> points;
         points.reserve((size_t)(endX - startX) + 10);
         bool wasValid = false;
@@ -435,7 +511,7 @@ namespace GraphLab::UI {
                 }
                 points.push_back(ImVec2(leftX, boundaryY));
                 if (points.size() > 1) {
-                    drawList->AddPolyline(points.data(), (int)points.size(), color, 0, 2.5f);
+                    renderSegment(points);
                 }
                 points.clear();
                 wasValid = false;
@@ -456,7 +532,7 @@ namespace GraphLab::UI {
 
                 if (isAsymptoteJump) {
                     if (points.size() > 1) {
-                        drawList->AddPolyline(points.data(), (int)points.size(), color, 0, 2.5f);
+                        renderSegment(points);
                     }
                     points.clear();
                 }
@@ -467,7 +543,7 @@ namespace GraphLab::UI {
         }
 
         if (points.size() > 1) {
-            drawList->AddPolyline(points.data(), (int)points.size(), color, 0, 2.5f);
+            renderSegment(points);
         }
     }
 
@@ -873,7 +949,56 @@ namespace GraphLab::UI {
             }
         }
 
-        // 6. Render cached polylines by transforming worldPoints to screen coordinates
+        // 6. Render 2D Region Shading if expression is an inequality (Row-Merged for 350x vertex reduction & crash prevention)
+        if (evaluator.IsInequality()) {
+            float cellSize = (isSliderActive || isCanvasDragging) ? 8.0f : 4.0f;
+            ImVec4 colFloat = ImGui::ColorConvertU32ToFloat4(color);
+            ImU32 shadingColor = ImGui::ColorConvertFloat4ToU32(ImVec4(colFloat.x, colFloat.y, colFloat.z, 0.22f));
+
+            Math::RelationType rel = evaluator.GetRelation();
+            float endCanvasX = canvasPos.x + canvasSize.x;
+            float endCanvasY = canvasPos.y + canvasSize.y;
+
+            for (float sy = canvasPos.y; sy < endCanvasY; sy += cellSize) {
+                float wy = (originScreen.y - (sy + cellSize * 0.5f)) / m_Zoom;
+                float runStartX = -1.0f;
+
+                for (float sx = canvasPos.x; sx < endCanvasX; sx += cellSize) {
+                    float wx = ((sx + cellSize * 0.5f) - originScreen.x) / m_Zoom;
+                    double val = evaluator.Evaluate(wx, wy);
+
+                    bool satisfy = false;
+                    if (std::isfinite(val)) {
+                        switch (rel) {
+                            case Math::RelationType::Less:
+                            case Math::RelationType::LessEqual:
+                                satisfy = (val <= 0.0); break;
+                            case Math::RelationType::Greater:
+                            case Math::RelationType::GreaterEqual:
+                                satisfy = (val >= 0.0); break;
+                            case Math::RelationType::NotEqual:
+                                satisfy = (std::abs(val) > 0.0001); break;
+                            default: break;
+                        }
+                    }
+
+                    if (satisfy) {
+                        if (runStartX < 0.0f) runStartX = sx;
+                    } else {
+                        if (runStartX >= 0.0f) {
+                            drawList->AddRectFilled(ImVec2(runStartX, sy), ImVec2(sx, std::min(sy + cellSize, endCanvasY)), shadingColor);
+                            runStartX = -1.0f;
+                        }
+                    }
+                }
+
+                if (runStartX >= 0.0f) {
+                    drawList->AddRectFilled(ImVec2(runStartX, sy), ImVec2(endCanvasX, std::min(sy + cellSize, endCanvasY)), shadingColor);
+                }
+            }
+        }
+
+        // 7. Render cached boundary polylines (Dashed for strict inequalities, solid for inclusive)
         std::vector<ImVec2> screenPoints;
         for (const auto& poly : cache.polylines) {
             if (poly.worldPoints.size() < 2) continue;
@@ -885,13 +1010,17 @@ namespace GraphLab::UI {
                 screenPoints.push_back(WorldToScreen(wPt, originScreen));
             }
 
-            drawList->AddPolyline(
-                screenPoints.data(),
-                static_cast<int>(screenPoints.size()),
-                color,
-                poly.closed ? ImDrawFlags_Closed : ImDrawFlags_None,
-                2.0f
-            );
+            if (evaluator.IsStrictInequality()) {
+                DrawDashedPolyline(drawList, screenPoints.data(), static_cast<int>(screenPoints.size()), color, 8.0f, 6.0f, 2.0f);
+            } else {
+                drawList->AddPolyline(
+                    screenPoints.data(),
+                    static_cast<int>(screenPoints.size()),
+                    color,
+                    poly.closed ? ImDrawFlags_Closed : ImDrawFlags_None,
+                    2.0f
+                );
+            }
         }
     }
 
