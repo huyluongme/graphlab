@@ -165,7 +165,7 @@ namespace GraphLab::UI {
     }
 
     SidebarPanel::SidebarPanel() {
-        AddExpression();
+        // Start with clean empty expressions list
     }
 
     void SidebarPanel::OnRenderUI() {
