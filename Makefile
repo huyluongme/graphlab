@@ -34,7 +34,7 @@ OBJS = $(addprefix $(OBJ_DIR)/, $(addsuffix .o, $(basename $(notdir $(SOURCES)))
 UNAME_S := $(shell uname -s 2>/dev/null || echo Windows_NT)
 
 CXXFLAGS = -std=c++17 -Wall -Wformat
-CXXFLAGS += -Isrc -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -I$(GLFW_DIR)/include -Ithirdparty/stb
+CXXFLAGS += -Isrc -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -Ithirdparty/stb
 
 # Detect Windows Environment (MSYS2, MinGW, Cygwin, Native Windows)
 IS_WINDOWS = 0
@@ -54,6 +54,7 @@ endif
 
 ifeq ($(IS_WINDOWS), 1)
     ECHO_MESSAGE = Windows (MinGW/MSYS2)
+    CXXFLAGS += -I$(GLFW_DIR)/include
     LIBS = $(GLFW_DIR)/win64/libglfw3.a -lopengl32 -lgdi32 -limm32 -lcomdlg32
     ifneq ($(DEBUG), 1)
         LIBS += -mwindows
@@ -63,6 +64,7 @@ ifeq ($(IS_WINDOWS), 1)
 else
     ECHO_MESSAGE = Linux
     LIBS = -lglfw -lGL -ldl -lpthread
+    LDFLAGS += -no-pie
     TARGET = $(BIN_DIR)/$(EXE)
     RES_OBJ =
 endif
@@ -110,7 +112,7 @@ $(BIN_DIR):
 
 # Link Executable
 $(TARGET): $(OBJS) $(RES_OBJ) | $(BIN_DIR)
-	$(CXX) -o $@ $^ $(CXXFLAGS) $(LIBS)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(CXXFLAGS) $(LIBS)
 
 clean:
 	rm -rf $(BUILD_DIR)
