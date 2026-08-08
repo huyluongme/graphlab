@@ -100,6 +100,12 @@ Pre-built binaries for Windows and Linux are available under the GitHub Releases
 
 ---
 
+## 🧠 Architecture & Algorithms
+
+For a detailed technical breakdown of the mathematical algorithms, parsing engine, numerical methods, and graphics rendering optimizations used in GraphLab, see **[docs/ALGORITHMS.md](docs/ALGORITHMS.md)**.
+
+---
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
