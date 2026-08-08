@@ -12,7 +12,14 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #include <windows.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#include <limits.h>
+#include <stdlib.h>
 #endif
+
+#include <vector>
+#include <string>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -29,6 +36,39 @@ static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     if (GraphLab::App::HasInstance() && GraphLab::App::Get().GetNativeWindow() == window) {
         GraphLab::App::Get().RenderFrame();
     }
+}
+
+static std::string GetExecutableDir() {
+#if defined(_WIN32)
+    char path[MAX_PATH];
+    DWORD len = GetModuleFileNameA(NULL, path, MAX_PATH);
+    if (len > 0) {
+        std::string strPath(path, len);
+        size_t pos = strPath.find_last_of("\\/");
+        return (pos != std::string::npos) ? strPath.substr(0, pos) : "";
+    }
+#elif defined(__linux__)
+    char path[PATH_MAX];
+    ssize_t count = readlink("/proc/self/exe", path, PATH_MAX);
+    if (count > 0) {
+        std::string strPath(path, count);
+        size_t pos = strPath.find_last_of('/');
+        return (pos != std::string::npos) ? strPath.substr(0, pos) : "";
+    }
+#endif
+    return "";
+}
+
+static std::string GetAssetPath(const std::string& relativePath) {
+    std::string exeDir = GetExecutableDir();
+    if (!exeDir.empty()) {
+        std::string path = exeDir + "/" + relativePath;
+        if (FILE* f = fopen(path.c_str(), "rb")) {
+            fclose(f);
+            return path;
+        }
+    }
+    return relativePath;
 }
 
 namespace GraphLab {
@@ -172,15 +212,9 @@ namespace GraphLab {
 
         // Load Inter-Medium font with full Vietnamese Unicode glyph ranges
         const ImWchar* vietnamese_ranges = io.Fonts->GetGlyphRangesVietnamese();
-        const char* inter_font_paths[] = { "assets/fonts/Inter_18pt-Medium.ttf", "../assets/fonts/Inter_18pt-Medium.ttf", "../../assets/fonts/Inter_18pt-Medium.ttf" };
+        std::string inter_path = GetAssetPath("assets/fonts/Inter_18pt-Medium.ttf");
         float font_size = 18.0f * main_scale;
-        for (const char* path : inter_font_paths) {
-            if (FILE* f = fopen(path, "rb")) {
-                fclose(f);
-                io.Fonts->AddFontFromFileTTF(path, font_size, nullptr, vietnamese_ranges);
-                break;
-            }
-        }
+        io.Fonts->AddFontFromFileTTF(inter_path.c_str(), font_size, nullptr, vietnamese_ranges);
 
         // Load FontAwesome 6 Free Solid icons merged with primary font
         static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
@@ -188,14 +222,8 @@ namespace GraphLab {
         icons_config.MergeMode = true;
         icons_config.PixelSnapH = true;
         icons_config.GlyphOffset = ImVec2(0.0f, -1.0f);
-        const char* icon_paths[] = { "assets/fonts/fa-solid-900.ttf", "../assets/fonts/fa-solid-900.ttf", "../../assets/fonts/fa-solid-900.ttf" };
-        for (const char* path : icon_paths) {
-            if (FILE* f = fopen(path, "rb")) {
-                fclose(f);
-                io.Fonts->AddFontFromFileTTF(path, font_size * 0.85f, &icons_config, icons_ranges);
-                break;
-            }
-        }
+        std::string icon_font_path = GetAssetPath("assets/fonts/fa-solid-900.ttf");
+        io.Fonts->AddFontFromFileTTF(icon_font_path.c_str(), font_size * 0.85f, &icons_config, icons_ranges);
 
         ImGui_ImplGlfw_InitForOpenGL(m_Window, true);
         ImGui_ImplOpenGL3_Init(glsl_version);
@@ -215,16 +243,9 @@ namespace GraphLab {
 #endif
 
         // 2. Cross-platform GLFW Window Icon fallback
-        const char* paths[] = { "assets/icon.png", "../assets/icon.png", "../../assets/icon.png" };
-        unsigned char* pixels = nullptr;
+        std::string icon_png_path = GetAssetPath("assets/icon.png");
         int w = 0, h = 0, channels = 0;
-
-        for (const char* path : paths) {
-            pixels = stbi_load(path, &w, &h, &channels, 4);
-            if (pixels)
-                break;
-        }
-
+        unsigned char* pixels = stbi_load(icon_png_path.c_str(), &w, &h, &channels, 4);
         if (pixels) {
             GLFWimage images[1];
             images[0].width = w;

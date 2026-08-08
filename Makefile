@@ -113,6 +113,9 @@ $(BIN_DIR):
 # Link Executable
 $(TARGET): $(OBJS) $(RES_OBJ) | $(BIN_DIR)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(CXXFLAGS) $(LIBS)
+	@mkdir -p $(BIN_DIR)/assets/fonts
+	@cp assets/fonts/*.ttf $(BIN_DIR)/assets/fonts/
+	@cp assets/icon.png $(BIN_DIR)/assets/
 
 clean:
 	rm -rf $(BUILD_DIR)
