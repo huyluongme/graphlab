@@ -151,6 +151,7 @@ namespace GraphLab {
             return false;
 
         ImGuiIO& io = ImGui::GetIO(); (void)io;
+        io.IniFilename = nullptr; // Disable imgui.ini generation
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 

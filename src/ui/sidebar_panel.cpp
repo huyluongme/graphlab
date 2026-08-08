@@ -165,7 +165,7 @@ namespace GraphLab::UI {
     }
 
     SidebarPanel::SidebarPanel() {
-        AddExpression("(x² + y² - 1)³ - x² · y³");
+        AddExpression();
     }
 
     void SidebarPanel::OnRenderUI() {
