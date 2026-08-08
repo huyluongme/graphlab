@@ -11,9 +11,7 @@
 
 ## 🎬 Demo & Showcase
 
-<div align="center">
-  <video src="assets/demo.mp4" autoplay loop muted playsinline width="100%"></video>
-</div>
+https://github.com/user-attachments/assets/c2fbcfa3-c10d-4016-9cca-093b6376165e
 
 ---
 
